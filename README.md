@@ -14,6 +14,8 @@ Date: 27/05/2016
 
 The generalization combines simplification followed by smoothing.
 
+![alt tag](cartolinegen.png)
+
 In process of implemented line simplification the complexity of vector features is reduced. The simplified lines preserve the areas of regions which they might bound. The module transforms a line into another line consisting of fewer vertices, that still approximate the original line. Resulting lines consist of a subset of points on the original line and new points.
 
 By preserving the area features will have some additional properties. The maximal generalization will result in convex shape of line (polygon). Selection or filtering based on area can be performed prior or after the generalization.
