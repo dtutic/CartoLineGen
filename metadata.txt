@@ -7,33 +7,33 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=Cartographic Line Generalisation
+name=Cartographic Line Generalization
 qgisMinimumVersion=2.0
 description=Simplify and smooth lines for given map scale.
+about=Algorithm gives lines on map with good geometrical and visual properties.
+      The generalization combines simplification followed by smoothing.
+      Generalization algorithms in this plugin are based on area preserving approach. This simulates manual generalization, and parameters of the algorithms were defined by analyzing manually generalized lines in different scales.
 version=0.1
-author=Dražen Tutić, University of Zagreb, Faculty of Geodesy
+author=Drazen Tutic
 email=dtutic@geof.hr
 
-about=Cartographic line generalisation with area preserving property combines simplification and smoothing in order to get nice generalised lines for printed or screen maps.
-
-tracker=github.com
-repository=github.com
 # End of mandatory metadata
 
-# Recommended items:
+# Optional items:
+
 
 # Uncomment the following line and add your changelog:
 # changelog=
 
 # Tags are comma separated with spaces allowed
-tags=map, line, generalisation, simplification, smoothing
+tags=generalization, simplification, smoothing, area preserving, cartography
 
-homepage=github.com
-category=Plugins
+homepage=http://dtutic.github.io/CartoLineGen/
+tracker=http://github.com/dtutic/CartoLineGen/issues
+repository=http://github.com/dtutic/CartoLineGen
 icon=icon.png
 # experimental flag
 experimental=False
 
 # deprecated flag (applies to the whole plugin, not just a single version)
 deprecated=False
-
