@@ -203,13 +203,11 @@ class CartoLineGen:
         if result:
             if self.dlg.dlg_file.text() != '':
                 try:
-                    f = open(self.dlg.dlg_file.text(), 'w')
-                    f.close()
                     self.generalize()
                 except:
-                    qgis.utils.iface.messageBar().pushMessage("Error", "Invalid or no output file given!", level=QgsMessageBar.CRITICAL, duration=10)
+                    qgis.utils.iface.messageBar().pushMessage("Error", "Can't create output file!", level=QgsMessageBar.CRITICAL, duration=10)
             else:        
-                qgis.utils.iface.messageBar().pushMessage("Error", "Invalid or no output file given!", level=QgsMessageBar.CRITICAL, duration=10)
+                qgis.utils.iface.messageBar().pushMessage("Error", "No output file given!", level=QgsMessageBar.CRITICAL, duration=10)
             
     def count_vertices(self):
         inLayer = self.dlg.dlg_layer.currentLayer()
@@ -250,7 +248,7 @@ class CartoLineGen:
             sel = self.dlg.dlg_selected.isChecked()
             error = QgsVectorFileWriter.writeAsVectorFormat(inLayer, inFile, "UTF-8", None, "ESRI Shapefile", onlySelected=sel)
             if error != QgsVectorFileWriter.NoError:
-                qgis.utils.iface.messageBar().pushMessage("Error", "Can't create temporary copy of selected layer!", level=QgsMessageBar.CRITICAL, duration=10)
+                qgis.utils.iface.messageBar().pushMessage("Error", "Can't create temporary copy of selected layer in "+inFile, level=QgsMessageBar.CRITICAL, duration=10)
             scale = float(self.dlg.dlg_scale.text())
             if self.dlg.dlg_remove_small.isChecked():
                 area = 0.5
