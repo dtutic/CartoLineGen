@@ -9,10 +9,12 @@
 [general]
 name=Cartographic Line Generalization
 qgisMinimumVersion=2.0
-description=Simplify and smooth lines for given map scale.
-about=Algorithm gives lines on map with good geometrical and visual properties.
-      The generalization combines simplification followed by smoothing.
-      Generalization algorithms in this plugin are based on area preserving approach. This simulates manual generalization, and parameters of the algorithms were defined by analyzing manually generalized lines in different scales.
+description=Generalize lines suitable for presentation on printed or screen maps.
+about=Algorithm gives lines (contours, coastlines, rivers etc.) on map with good geometrical and visual properties suitable for presentation on paper or screen maps.
+      
+      Level of generalization is controlled only by map scale making it very simple to use. If the result still looks too detailed or coarse for some purpose, just change the scale parameter.
+      It has distinct property of area preservation of features. This ensures that polygons do not collapse to lines or points, and also ensures closeness of input and generalized line. Nevertheless, topological issues are possible, e.g. self-intersections or intersections of features.
+      The generalization combines simplification followed by smoothing. Generalization algorithms are based on area preserving approach known from generalization theory. This simulates manual generalization, and parameters of the algorithms were defined by analyzing manually generalized lines in different scales.
 version=0.1
 author=Drazen Tutic
 email=dtutic@geof.hr
