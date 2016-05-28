@@ -193,19 +193,24 @@ class CartoLineGen:
     
     def run(self):
         """Run method that performs all the real work"""
-        # show the dialog
+        #clear output filename
+        self.dlg.dlg_file.setText('')
+        #round canvas map scale to 1000, results of generalisation are not that much sensitive to precise scale
         self.dlg.dlg_scale.setText(str(int(self.iface.mapCanvas().scale()/1000)*1000))
-        #self.dlg.button_box.button(0x00000400).clicked.connect(self.generalize) # connect OK button to main process
-        self.dlg.dlg_layer.currentIndexChanged.connect(self.count_vertices) # count number of vertices in order to estimate time
+        #connect counting of vertices when layer is changed in order to estimate time
+        self.dlg.dlg_layer.currentIndexChanged.connect(self.count_vertices) 
+        #count vertices if there is layer in project in order to show it when dialog is loaded
         if self.dlg.dlg_layer.currentLayer() != None:
             self.count_vertices()
+        #execute dialog    
         result = self.dlg.exec_()
         if result:
+            #check if output filename is given
             if self.dlg.dlg_file.text() != '':
                 try:
                     self.generalize()
                 except:
-                    qgis.utils.iface.messageBar().pushMessage("Error", "Can't create output file!", level=QgsMessageBar.CRITICAL, duration=10)
+                    qgis.utils.iface.messageBar().pushMessage("Error", "Can't generalize! Check geometry validity.", level=QgsMessageBar.CRITICAL, duration=10)
             else:        
                 qgis.utils.iface.messageBar().pushMessage("Error", "No output file given!", level=QgsMessageBar.CRITICAL, duration=10)
             
@@ -218,23 +223,25 @@ class CartoLineGen:
                 feat = inLayer.getFeatures()
             count = 0
             for feature in feat:
-                geom = feature.geometry() 
-                if geom.type() == QGis.Polygon: 
-                    if geom.isMultipart(): 
-                        polygons = geom.asMultiPolygon() 
-                    else: 
-                        polygons = [ geom.asPolygon() ] 
-                    for polygon in polygons: 
-                        for ring in polygon: 
-                            count += len(ring) 
-                if geom.type() == QGis.Line: 
-                    if geom.isMultipart(): 
-                        polylines = geom.asMultiPolyline() 
-                    else: 
-                        polylines = [ geom.asPolyline() ] 
-                    for polyline in polylines: 
-                        count += len(polyline)             
-            self.dlg.dlg_warning.setText(str(count)+" vertices. Generalisation can take up to "+ str(int(count/400000)+1)+" min!")
+                geom = feature.geometry()
+                if geom != None:                
+                    if geom.type() == QGis.Polygon: 
+                        if geom.isMultipart(): 
+                            polygons = geom.asMultiPolygon() 
+                        else: 
+                            polygons = [ geom.asPolygon() ] 
+                        for polygon in polygons: 
+                            for ring in polygon: 
+                                count += len(ring) 
+                    if geom.type() == QGis.Line: 
+                        if geom.isMultipart(): 
+                            polylines = geom.asMultiPolyline() 
+                        else: 
+                            polylines = [ geom.asPolyline() ] 
+                        for polyline in polylines: 
+                            count += len(polyline)             
+            if count > 0:
+                self.dlg.dlg_warning.setText(str(count)+" vertices. Generalisation can take up to "+ str(int(count/400000)+1)+" min!")
 
     def generalize(self):
         inLayer = self.dlg.dlg_layer.currentLayer()
@@ -243,26 +250,41 @@ class CartoLineGen:
             return
             
         if not inLayer.crs().geographicFlag():
-            #qgis.utils.iface.messageBar().pushMessage("Info", "Creating temp copy of input layer ...", level=QgsMessageBar.INFO, duration=5)
+            #create temporary shapefile filename, it will be used as input by external process "generalize.py" which uses GDAL/OGR
             inFile = os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.shp'
+            #check if only selected objects are to be generalized           
             sel = self.dlg.dlg_selected.isChecked()
-            error = QgsVectorFileWriter.writeAsVectorFormat(inLayer, inFile, "UTF-8", None, "ESRI Shapefile", onlySelected=sel)
+            #sometimes layer can have malformed geometries, so select all valid features for save
+            if not sel:
+                inLayer.selectAll()                  
+            #save to temporary file because GDAL/OGR functions are used to access geometries and write generalised lines    
+            error = QgsVectorFileWriter.writeAsVectorFormat(inLayer, inFile, "UTF-8", None, "ESRI Shapefile", onlySelected=True)
             if error != QgsVectorFileWriter.NoError:
                 qgis.utils.iface.messageBar().pushMessage("Error", "Can't create temporary copy of selected layer in "+inFile, level=QgsMessageBar.CRITICAL, duration=10)
+            #set selection to previous state
+            if not sel:
+                inLayer.removeSelection()
+            #scale is main parameter of algorithm    
             scale = float(self.dlg.dlg_scale.text())
+            #check if small polygons should be filtered out by area threshold: 0.5 mm2 in map scale
+            #too small lines are never removed for these can break topology
             if self.dlg.dlg_remove_small.isChecked():
                 area = 0.5
             else:
                 area = 0            
+            #set output filename    
             outFile = self.dlg.dlg_file.text()
-            #qgis.utils.iface.messageBar().pushMessage("Info", "Generalisation started. It can take a while ...", level=QgsMessageBar.INFO, duration=10)
+            
             #call generalisation algorithm which is based on python GDAL/OGR API
             generalize.Generalize(scale,area,inFile,outFile)
             qgis.utils.iface.messageBar().pushMessage("Success", "Generalisation finished and data saved to "+outFile, level=QgsMessageBar.SUCCESS, duration=5)
+            
+            #check if to load output and add layer to map canvas
             if self.dlg.dlg_add.isChecked():
                 outLayer = self.iface.addVectorLayer(outFile, inLayer.name()+"_generalised", "ogr")
                 if not outLayer:
                     qgis.utils.iface.messageBar().pushMessage("Error", "Can't open generalised layer!", level=QgsMessageBar.CRITICAL, duration=10)
+            #remove temp files
             os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.dbf')
             os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.prj')
             os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.qpj')
