@@ -199,9 +199,10 @@ class CartoLineGen:
         # show the dialog
         self.dlg.dlg_scale.setText(str(int(self.iface.mapCanvas().scale()/1000)*1000))
         self.dlg.button_box.button(0x00000400).clicked.connect(self.generalize) # connect OK button to main process
-        self.dlg.dlg_layer.currentIndexChanged.connect(self.count_vertices) # region from layer
+        self.dlg.dlg_layer.currentIndexChanged.connect(self.count_vertices) # count number of vertices in order to estimate time
         self.dlg.show()
-        self.count_vertices()
+        if self.dlg.dlg_layer.currentLayer() != None:
+            self.count_vertices()
             
     def count_vertices(self):
         inLayer = self.dlg.dlg_layer.currentLayer()
@@ -227,10 +228,11 @@ class CartoLineGen:
         self.dlg.dlg_warning.setText(str(count)+" vertices. Generalisation can take up to "+ str(int(count/400000)+1)+" min!")
 
     def generalize(self):
-        # Do something useful here - delete the line containing pass and
-        # substitute with your code.
         inLayer = self.dlg.dlg_layer.currentLayer()
         
+        if inLayer == None: #no input layer selected
+            return
+            
         if not inLayer.crs().geographicFlag():
             #qgis.utils.iface.messageBar().pushMessage("Info", "Creating temp copy of input layer ...", level=QgsMessageBar.INFO, duration=5)
             inFile = os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.shp'
