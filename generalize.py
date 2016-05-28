@@ -5,7 +5,10 @@ def zig_zag(a,b,c,d): #returns true if three segments form zig-zag
     return (a[1]*(c[0]-b[0])+b[1]*(a[0]-c[0])+c[1]*(b[0]-a[0]))*(b[1]*(d[0]-c[0])+c[1]*(b[0]-d[0])+d[1]*(c[0]-b[0])) < ZERO_EPSILON
 
 def polygon_area(a,b,c,d): #surveyors formula for 4 points
-    return (b[0]-a[0])*(b[1]+a[1])+(c[0]-b[0])*(c[1]+b[1])+(d[0]-c[0])*(d[1]+c[1])  
+    return (b[0]-a[0])*(b[1]+a[1])+(c[0]-b[0])*(c[1]+b[1])+(d[0]-c[0])*(d[1]+c[1]) 
+
+def polygon_area_closed(a,b,c,d): #surveyors formula for 4 points
+    return a[0]*(b[1]-d[1])+b[0]*(c[1]-a[1])+c[0]*(d[1]-b[1])+d[0]*(a[1]-c[1])
 
 def squared_length(p1,p2):
     return (p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1])    
@@ -21,7 +24,7 @@ def Simplify(p1,p2,p3,p4): # chose new point so that the area of intersection of
     c = A1*B2 - A2*B1
     if c != 0.:
         pt[0] = (B2*C1 - B1*C2)/c
-        pt[1] = (A1*C2-A2*C1)/c
+        pt[1] = (A1*C2 - A2*C1)/c
         if (pt[0]-p1[0])*(pt[0]-p2[0]) > 0. or (pt[1]-p1[1])*(pt[1]-p2[1]) > 0.: 
             A2 = p4[1]-p3[1]
             B2 = p3[0]-p4[0]
@@ -30,8 +33,24 @@ def Simplify(p1,p2,p3,p4): # chose new point so that the area of intersection of
             if (c!=0.):
                 pt[0] = (B2*C1-B1*C2)/c
                 pt[1] = (A1*C2-A2*C1)/c
+                if (pt[0]-p3[0])*(pt[0]-p4[0]) > 0. or (pt[1]-p3[1])*(pt[1]-p4[1]) > 0.: 
+                    pt[0] = (p1[0]+p4[0])*0.5
+                    pt[1] = (p1[1]+p4[1])*0.5
     else:
-        print "This should not happen! Some duplicate points created during simplification?"    
+        A2 = p4[1]-p3[1]
+        B2 = p3[0]-p4[0]
+        C2 = A2*p3[0]+B2*p3[1]
+        c = A1*B2-A2*B1
+        if (c!=0.):
+            pt[0] = (B2*C1-B1*C2)/c
+            pt[1] = (A1*C2-A2*C1)/c
+            if (pt[0]-p3[0])*(pt[0]-p4[0]) > 0. or (pt[1]-p3[1])*(pt[1]-p4[1]) > 0.: 
+                pt[0] = (p1[0]+p4[0])*0.5
+                pt[1] = (p1[1]+p4[1])*0.5
+        else:
+            if abs(polygon_area_closed(p1,p2,p3,p4)) < ZERO_EPSILON:
+                pt[0] = (p1[0]+p4[0])*0.5
+                pt[1] = (p1[1]+p4[1])*0.5
     return 1,pt
  
 def Generalize_Ring(g):
@@ -127,10 +146,8 @@ def Generalize_Ring(g):
     for i in range (0,p_len):
         ring.AddPoint(points[i,0], points[i,1])
     output_area = ring.Area()
-    
-    area_ratio = abs(input_area-output_area)/input_area
-    if area_ratio > 1e-6:
-        print "Significant area change [input area, output area, percent of change]:",input_area,output_area,area_ratio*100  
+    if points[0,0]!=points[p_len-1,0] or points[0,1]!=points[p_len-1,1]:
+        ring.AddPoint(points[0,0], points[0,1])
     return 1,ring
 
 def Generalize_Line(g):
@@ -331,11 +348,8 @@ def Smooth_Ring(g):
     ring = ogr.Geometry(ogr.wkbLinearRing)    
     for i in range (0,p_len):
         ring.AddPoint(points[i,0], points[i,1])
-    output_area = ring.Area()
-    
-    area_ratio = abs(input_area-output_area)/input_area
-    if area_ratio > 1e-6:
-        print "Significant area change [input area, output area, percent of change]:",input_area,output_area,area_ratio*100  
+    if points[0,0]!=points[p_len-1,0] or points[0,1]!=points[p_len-1,1]:
+        ring.AddPoint(points[0,0], points[0,1])
     return 1,ring
 
 def Smooth_Line(g):
