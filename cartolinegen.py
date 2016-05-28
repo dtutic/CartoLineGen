@@ -201,7 +201,15 @@ class CartoLineGen:
             self.count_vertices()
         result = self.dlg.exec_()
         if result:
-            self.generalize()
+            if self.dlg.dlg_file.text() != '':
+                try:
+                    f = open(self.dlg.dlg_file.text(), 'w')
+                    f.close()
+                    self.generalize()
+                except:
+                    qgis.utils.iface.messageBar().pushMessage("Error", "Invalid or no output file given!", level=QgsMessageBar.CRITICAL, duration=10)
+            else:        
+                qgis.utils.iface.messageBar().pushMessage("Error", "Invalid or no output file given!", level=QgsMessageBar.CRITICAL, duration=10)
             
     def count_vertices(self):
         inLayer = self.dlg.dlg_layer.currentLayer()
