@@ -29,12 +29,9 @@ from cartolinegen_dialog import CartoLineGenDialog
 from PyQt4.QtGui import QFileDialog
 from qgis.gui import QgsMessageBar, QgsMapLayerComboBox
 import os.path
-import numpy as np
-import math
-import ogr
-import qgis 
-from qgis.core import *
 import generalize
+from qgis.core import *
+import qgis
 
 class CartoLineGen:
     """QGIS Plugin Implementation."""
