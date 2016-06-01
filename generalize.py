@@ -15,6 +15,12 @@ def squared_length(p1,p2):
 
 def Simplify(p1,p2,p3,p4): # chose new point so that the area of intersection of input and output figure is maximal
     pt = np.zeros(2)
+    #check if point lies on line or makes symetrical zig-zag
+    if abs(polygon_area_closed(p1,p2,p3,p4)) < ZERO_AREA: #< 1E-6
+        pt[0] = (p1[0]+p4[0])*0.5
+        pt[1] = (p1[1]+p4[1])*0.5
+        return 1,pt
+    
     C1 = p2[0]*(p1[1]-p3[1])+p3[0]*(p2[1]-p4[1])-p1[0]*p2[1]+p4[0]*p3[1]
     A1 = p1[1] - p4[1]
     B1 = p4[0] - p1[0]
@@ -48,7 +54,7 @@ def Simplify(p1,p2,p3,p4): # chose new point so that the area of intersection of
                 pt[0] = (p1[0]+p4[0])*0.5
                 pt[1] = (p1[1]+p4[1])*0.5
         else:
-            if abs(polygon_area_closed(p1,p2,p3,p4)) < ZERO_EPSILON:
+            if abs(polygon_area_closed(p1,p2,p3,p4)) < ZERO_AREA:
                 pt[0] = (p1[0]+p4[0])*0.5
                 pt[1] = (p1[1]+p4[1])*0.5
     return 1,pt
@@ -424,6 +430,7 @@ def Generalize(scale,small_area,inFile,outFile):
     global ZERO_EPSILON
     global MIN_ANGLE
     global SQR_SMOOTH_LENGTH
+    global ZERO_AREA
     
     DEL_AREA = (scale/1000)*(scale/1000)*small_area #small area in map units
     TOL_LENGTH = scale/2300 #main paramater of the algorithm
@@ -431,6 +438,7 @@ def Generalize(scale,small_area,inFile,outFile):
     ZERO_EPSILON = 1E-12 # treat as zero
     MIN_ANGLE = 150.*math.pi/180.
     SQR_SMOOTH_LENGTH = 20.*SQR_TOL_LENGTH
+    ZERO_AREA = 1E-6 # treat as zero area
     
     driver = ogr.GetDriverByName('ESRI Shapefile')
     inDataSet = driver.Open(inFile, 0)
