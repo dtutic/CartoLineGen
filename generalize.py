@@ -1,8 +1,31 @@
+# -*- coding: utf-8 -*-
+"""
+/***************************************************************************
+ CartoLineGen
+                                 A QGIS plugin
+ Simplify and smooth lines for given map scale.
+                              -------------------
+        begin                : 2016-05-25
+        git sha              : $Format:%H$
+        copyright            : (C) 2016 by Dražen Tutić, University of Zagreb, Faculty of Geodesy
+        email                : dtutic@geof.hr
+ ***************************************************************************/
+
+/***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
+"""
+
 import ogr,sys,math,random,os
 import numpy as np
 
 def zig_zag(a,b,c,d): #returns true if three segments form zig-zag
-    return (a[1]*(c[0]-b[0])+b[1]*(a[0]-c[0])+c[1]*(b[0]-a[0]))*(b[1]*(d[0]-c[0])+c[1]*(b[0]-d[0])+d[1]*(c[0]-b[0])) < ZERO_EPSILON
+    return (a[1]*(c[0]-b[0])+b[1]*(a[0]-c[0])+c[1]*(b[0]-a[0]))*(b[1]*(d[0]-c[0])+c[1]*(b[0]-d[0])+d[1]*(c[0]-b[0])) < -ZERO_EPSILON
 
 def polygon_area(a,b,c,d): #surveyors formula for 4 points
     return (b[0]-a[0])*(b[1]+a[1])+(c[0]-b[0])*(c[1]+b[1])+(d[0]-c[0])*(d[1]+c[1]) 
@@ -10,17 +33,24 @@ def polygon_area(a,b,c,d): #surveyors formula for 4 points
 def polygon_area_closed(a,b,c,d): #surveyors formula for 4 points
     return a[0]*(b[1]-d[1])+b[0]*(c[1]-a[1])+c[0]*(d[1]-b[1])+d[0]*(a[1]-c[1])
 
-def squared_length(p1,p2):
+def squared_length(p1,p2): #squared length of segment
     return (p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1])    
 
+#------------------------------------------------------------------------------------------------------------------
+# Main simplification function
+# Takes four consecutive points forming three consecutive segments in line
+# Segments forms "S" shape, zig-zag line because this is part of line that is usefull to simplify. For example,
+# convex part of lines will be intact, as well as convex shapes.
+# Algorithm preserves p1 and p4. Vertices p2 and p3 are replaces by now point pt in a way that
+# area of input and output figure is preserved, and area of intersection of figures
+# p1-p2-p3-p4-p1 and p1-pt-p4-p1 is maximal. This way closenes of input and output lines is
+# reasonable and nicely preserved.
+#
+# TODO: This is fairly complicated computation for each deleted point and performance should be improved
+#------------------------------------------------------------------------------------------------------------------ 
+    
 def Simplify(p1,p2,p3,p4): # chose new point so that the area of intersection of input and output figure is maximal
     pt = np.zeros(2)
-    #check if point lies on line or makes symetrical zig-zag
-    if abs(polygon_area_closed(p1,p2,p3,p4)) < ZERO_AREA: #< 1E-6
-        pt[0] = (p1[0]+p4[0])*0.5
-        pt[1] = (p1[1]+p4[1])*0.5
-        return 1,pt
-    
     C1 = p2[0]*(p1[1]-p3[1])+p3[0]*(p2[1]-p4[1])-p1[0]*p2[1]+p4[0]*p3[1]
     A1 = p1[1] - p4[1]
     B1 = p4[0] - p1[0]
@@ -54,12 +84,26 @@ def Simplify(p1,p2,p3,p4): # chose new point so that the area of intersection of
                 pt[0] = (p1[0]+p4[0])*0.5
                 pt[1] = (p1[1]+p4[1])*0.5
         else:
-            if abs(polygon_area_closed(p1,p2,p3,p4)) < ZERO_AREA:
+            if abs(polygon_area_closed(p1,p2,p3,p4)) < ZERO_EPSILON:
                 pt[0] = (p1[0]+p4[0])*0.5
                 pt[1] = (p1[1]+p4[1])*0.5
     return 1,pt
+    
+#-----------------------------------------------------------------------------------------------------------------
+# This functions simplifies closed lines (rings). 
+# Closed lines are treated in a way that no point is considered as starting or ending point and each point
+# can be deleted or moved. This gives better output, as the line is redrawed manually.
+# Local operator in function Simplify is called first for the smallest segment in line which forms zig-zig with
+# its neighbouring segments, and after modification, the smallest segment in modified line is next candidate for
+# simplification.
+# This way line is almost always treated in the same order (exception can be multiple segments with minimal length)
+# and this is very useful for generalisation of neighbouring polygons, because borders will remain very close, or
+# equal on some parts. Other advantage is that it gives kind of global property to generalisation, meaning that
+# line can be generalised multiple times through intermediate scales or directly to final smaller scale, and result 
+# should be same or very similar.
+#------------------------------------------------------------------------------------------------------------------
  
-def Generalize_Ring(g):
+def Simplify_Ring(g,geom_type):
     input_area = g.Area()
     if input_area < DEL_AREA:
         return 0,g #area of ring is too small to keep on map   
@@ -78,6 +122,21 @@ def Generalize_Ring(g):
             points[j,0] = p[0]
             points[j,1] = p[1]
     p_len = j+1 #final number of points in point list
+    
+    #malformed closed geometry
+    if p_len < 4:
+        return 0,g
+    #triangle, nothing to generalize, return cleaned    
+    if p_len == 4:    
+        if geom_type == 0:
+            ring = ogr.Geometry(ogr.wkbLinearRing)    
+        else:
+            ring = ogr.Geometry(ogr.wkbLineString)    
+        for i in range (0,p_len):
+            ring.AddPoint(points[i,0], points[i,1])
+        if points[0,0]!=points[p_len-1,0] or points[0,1]!=points[p_len-1,1]:
+            ring.AddPoint(points[0,0], points[0,1])
+        return -1,ring
 
     #calculate squared segments lengths, algorithm always change line where shorthest segment is found
     segments = np.zeros(p_len-1)
@@ -148,16 +207,30 @@ def Generalize_Ring(g):
         i = np.argmin(segments) #index of new shortest segment
         min_s = np.amin(segments) #squared length of new shortest segment
         
-    ring = ogr.Geometry(ogr.wkbLinearRing)    
+    if geom_type == 0:
+        ring = ogr.Geometry(ogr.wkbLinearRing)    
+    else:
+        ring = ogr.Geometry(ogr.wkbLineString)    
     for i in range (0,p_len):
         ring.AddPoint(points[i,0], points[i,1])
-    output_area = ring.Area()
+    #output_area = ring.Area()
     if points[0,0]!=points[p_len-1,0] or points[0,1]!=points[p_len-1,1]:
         ring.AddPoint(points[0,0], points[0,1])
     return 1,ring
 
-def Generalize_Line(g):
-  
+#-----------------------------------------------------------------------------------------------------------------
+# This functions simplifies open lines. First and last points are same in output which preserves topology.
+# Local operator in function Simplify is called first for the smallest segment in line which forms zig-zig with
+# its neighbouring segments, and after modification, the smallest segment in modified line is next candidate for
+# simplification.
+# This way line is almost always treated in the same order (exception can be multiple segments with minimal length)
+# and this is very useful for generalisation of duplicate lines, because such borders will remain very close, or
+# equal on some parts. Other advantage is that it gives kind of global property to generalisation, meaning that
+# line can be generalised multiple times through intermediate scales or directly to final smaller scale, and result 
+# should be same or very similar.
+#------------------------------------------------------------------------------------------------------------------  
+    
+def Simplify_Line(g):
     p_len = g.GetPointCount()
     points = np.zeros((p_len,2))
     j = 0
@@ -172,7 +245,17 @@ def Generalize_Line(g):
             points[j,0] = p[0]
             points[j,1] = p[1]
     p_len = j+1 #final number of points in point list
-
+    
+    #malformed linear geometry
+    if p_len <= 1:
+        return 0,g
+    #segment or two segments, nothing to generalize, return cleaned geometry    
+    if p_len <= 3:
+        line = ogr.Geometry(ogr.wkbLineString)    
+        for i in range (0,p_len):
+            line.AddPoint(points[i,0], points[i,1])
+        return -1,line
+        
     #calculate squared segments lengths, algorithm always change line where shorthest segment is found
     segments = np.zeros(p_len-1)
     for i in range(0, p_len-1):
@@ -207,10 +290,11 @@ def Generalize_Line(g):
             segments[i] = 2*SQR_TOL_LENGTH
         i = np.argmin(segments) #index of new shortest segment
         min_s = np.amin(segments) #squared length of new shortest segment
-        
+    
     line = ogr.Geometry(ogr.wkbLineString)    
     for i in range (0,p_len):
         line.AddPoint(points[i,0], points[i,1])
+        
     return 1,line
 
 def segments_angle(p1, p2, p3): 
@@ -228,6 +312,18 @@ def segments_angle(p1, p2, p3):
         da = math.pi*2. - da; # correct the angle to interval 0-PI
     return da
 
+#------------------------------------------------------------------------------------------------------------------
+# Main smoothing function.
+# Takes three consecutive points forming two consecutive segments in line.
+# Algorithm preserves p1 and p3. Vertex p2 is replaced by now points ps and pq in a way that
+# p1-ps-pq-p3-p1 forms an isosceles trapesoid with less sharper angles then input one.
+#
+# TODO: This is fairly complicated computation for each iteration and performance should be improved
+# TODO: ps and pq does not have to form only isosceles trapesoid in order to preserve area. Parallel movement
+# along line ps-pq is possible and maximal area of intersection of figures p1-p2-p3-p1 and p1-pq-pq-p3-p1 
+# could be obtained. This should improve quality of smoothing.
+#------------------------------------------------------------------------------------------------------------------    
+    
 def Smooth(p1,p2,p3):
     ps = np.zeros(2) #temp point for calculation
     pq = np.zeros(2) #temp point for calculation
@@ -260,8 +356,21 @@ def Smooth(p1,p2,p3):
         pq[1] -= 2.*p
         pq[0] -= 2.*q
     return ps,pq    
-    
-def Smooth_Ring(g):
+ 
+#-----------------------------------------------------------------------------------------------------------------
+# This functions smoothes closed lines (rings). 
+# Closed lines are treated in a way that no point is considered as starting or ending point and each point
+# can be deleted or moved. This gives better output, as the line is redrawed manually.
+# Local operator in function Smooth is called first for the sharpest angle in line, and after modification, 
+# the sharpest angle in modified line is next candidate for smoothing.
+# This way line is almost always treated in the same order (exception can be multiple segments with minimal length)
+# and this is very useful for generalisation of neighbouring polygons, because borders will remain very close, or
+# equal on some parts. Other advantage is that it gives kind of global property to generalisation, meaning that
+# line can be generalised multiple times through intermediate scales or directly to final smaller scale, and result 
+# should be same or very similar.
+#------------------------------------------------------------------------------------------------------------------   
+ 
+def Smooth_Ring(g,geom_type):
 
     input_area = g.Area()
     if input_area < DEL_AREA:
@@ -282,6 +391,10 @@ def Smooth_Ring(g):
             points[j,1] = p[1]
     p_len = j+1 #final number of points in point list
 
+    #malformed closed linear geometry, for closed one at least 4 points are needed
+    if p_len < 4:
+        return 0,g
+           
     ps = np.zeros(2) #temp point for calculation
     pq = np.zeros(2) #temp point for calculation
     
@@ -305,20 +418,20 @@ def Smooth_Ring(g):
             if segments[p_len-2] < SQR_SMOOTH_LENGTH and segments[i] < SQR_SMOOTH_LENGTH:
                 #TODO: check what is going on here!
                 #calculation of the two new points, keeping the area
-                #ps,pq = Smooth(points[p_len-2], points[i], points[i+1])      
+                ps,pq = Smooth(points[p_len-2], points[i], points[i+1])      
                 #update the point list
-                #points[i] = ps #change starting point
-                #points[p_len-1] = ps #change ending point
-                #points = np.insert(points,i+1,pq,0) #add new point before point after middle point
-                #segments = np.insert(segments,i+1,squared_length(points[i+1],points[i+2]),0) #add last segment
-                #segments[p_len-2] = squared_length(points[p_len-2],points[i]) #update middle segment
-                #segments[i] = squared_length(points[i],points[i+1]) #update first segment
-                #angles = np.insert(angles,i+1,segments_angle(points[i], points[i+1], points[i+2])) #add angle on point pq
-                #angles[i] = segments_angle(points[p_len-2], points[i], points[i+1])
-                #angles[p_len-2] = segments_angle(points[p_len-3], points[p_len-2], points[i])
-                #angles[i+2] = segments_angle(points[i+1], points[i+2], points[i+3])
-                #p_len = p_len + 1
-                angles[i] =  2*MIN_ANGLE  #check what happens, meanwhile skip this angle
+                points[i] = ps #change starting point
+                points[p_len-1] = ps #change ending point
+                points = np.insert(points,i+1,pq,0) #add new point before point after middle point
+                p_len = p_len + 1
+                segments = np.insert(segments,i+1,squared_length(points[i+1],points[i+2]),0) #add last segment
+                segments[p_len-2] = squared_length(points[p_len-2],points[i]) #update middle segment
+                segments[i] = squared_length(points[i],points[i+1]) #update first segment
+                angles = np.insert(angles,i+1,segments_angle(points[i], points[i+1], points[i+2])) #add angle on point pq
+                angles[i] = segments_angle(points[p_len-2], points[i], points[i+1])
+                angles[p_len-2] = segments_angle(points[p_len-3], points[p_len-2], points[i])
+                angles[i+2] = segments_angle(points[i+1], points[i+2], points[i+3])
+                #angles[i] =  2*MIN_ANGLE  #check what happens, meanwhile skip this angle
             else:
                 angles[i] =  2*MIN_ANGLE  #angle was sharp but segments were too long, skip it in next iteration     
             #if segments are smaller then threshold
@@ -350,14 +463,28 @@ def Smooth_Ring(g):
         i = np.argmin(angles) #index of sharpest angle
         min_a = np.amin(angles) #sharpest angle
     #while angle is smaller then threshold
-
-    ring = ogr.Geometry(ogr.wkbLinearRing)    
+        
+    if geom_type == 0:
+        ring = ogr.Geometry(ogr.wkbLinearRing)    
+    else:
+        ring = ogr.Geometry(ogr.wkbLineString)    
     for i in range (0,p_len):
         ring.AddPoint(points[i,0], points[i,1])
     if points[0,0]!=points[p_len-1,0] or points[0,1]!=points[p_len-1,1]:
         ring.AddPoint(points[0,0], points[0,1])
     return 1,ring
 
+#-----------------------------------------------------------------------------------------------------------------
+# This functions smoothes open lines. First and end points are preserved in output.
+# Local operator in function Smooth is called first for the sharpest angle in line, and after modification, 
+# the sharpest angle in modified line is next candidate for smoothing.
+# This way line is almost always treated in the same order (exception can be multiple segments with minimal length)
+# and this is very useful for generalisation of neighbouring polygons, because borders will remain very close, or
+# equal on some parts. Other advantage is that it gives kind of global property to generalisation, meaning that
+# line can be generalised multiple times through intermediate scales or directly to final smaller scale, and result 
+# should be same or very similar.
+#------------------------------------------------------------------------------------------------------------------   
+    
 def Smooth_Line(g):
     p_len = g.GetPointCount()
     points = np.zeros((p_len,2))
@@ -373,7 +500,17 @@ def Smooth_Line(g):
             points[j,0] = p[0]
             points[j,1] = p[1]
     p_len = j+1 #final number of points in point list
-
+    
+    #malformed linear geometry, zero or one point
+    if p_len < 2:
+        return 0,g
+    #geometry of one segment, nothing to smooth, return cleaned    
+    if p_len == 2:    
+        line = ogr.Geometry(ogr.wkbLineString)    
+        for i in range (0,p_len):
+            line.AddPoint(points[i,0], points[i,1])
+        return -1,line
+        
     ps = np.zeros(2) #temp point for calculation
     pq = np.zeros(2) #temp point for calculation
     
@@ -422,8 +559,77 @@ def Smooth_Line(g):
     
     return 1,line
     
-#start of main program
-def Generalize(scale,small_area,inFile,outFile):    
+
+#-----------------------------------------------------------------------------------------------------------
+# Decide how the geometry will be treated, e.g. rings, lines, single geometries or multiple geometries
+# TODO: Shorten code, e.g. alg_type == 0 is combination of alg_type == 1 and alg_type == 2
+#-----------------------------------------------------------------------------------------------------------
+    
+def Decide(g,closed,g_type,out_geom,alg_type,single_line):
+    gen = 0 #assume there is nothing to preserve after generalisation
+    
+    if alg_type == 0: #perform simplification and smoothing
+        if closed: #rings are allways closed, for lines it is determined in advance
+            flag,simpl = Simplify_Ring(g,g_type) #g_type == 0 means ring and g_type=1 means closed line
+        else:
+            flag,simpl = Simplify_Line(g) #flag == 0 means that geometry should be deleted from output     
+        if flag == 1 or flag == -1: #flag == 1 means some simplification happened, proceed with smoothing 
+            if closed:
+                flag,smooth = Smooth_Ring(simpl,g_type) #g_type == 0 means ring and g_type=1 means closed line
+            else:
+                flag,smooth = Smooth_Line(simpl) #flag == 0 means that geometry should be deleted from output     
+                #print "Dosao u smooth"                
+            if flag == 1 or flag == -1: #flag == -1 means that geometry was not changed by smoothing but it should be preserved in output
+                if single_line: #single geometry, direct assignment
+                    out_geom = smooth
+                else: #multigeometry, add part to it   
+                    out_geom.AddGeometry(smooth)
+                gen = 1 #there is geometry to preserve in output
+            
+    if alg_type == 1: #perform only simplification, same as alg_type==0, but only simplification is performed
+        if closed:
+            flag,simpl = Simplify_Ring(g,g_type) 
+        else:
+            flag,simpl = Simplify_Line(g)                    
+        if flag == 1 or flag == -1:
+            if single_line:
+                out_geom = simpl
+            else:    
+                out_geom.AddGeometry(simpl)
+            gen = 1
+            
+    if alg_type == 2: #perform only smoothing, , same as alg_type==0, but only simplification is performed
+        if closed:
+            flag,smooth = Smooth_Ring(g,g_type)
+        else:
+            flag,smooth = Smooth_Line(g)                       
+        if flag == 1 or flag == -1:
+            if single_line:
+                out_geom = smooth
+            else:    
+                out_geom.AddGeometry(smooth)
+            gen = 1
+           
+    return gen,out_geom
+    
+#-------------------------------------------------------------------------------------------------------------
+# Main function called for a generalisation of geometry in ESRI Shapefile
+# TODO: Allow different file formats
+#
+# Arguments: 
+#    scale - map scale denominator for which generalisation as on paper topographic maps will be performed
+#            for more generalisation increase scale denominator, and for less generalisation decrease its value
+#    small_area - 0.5 mmm2 in map scale, minimal size readible on maps
+#            could be left to user to define
+#    alg_type - 0 = full generalisation (simplification and smoothing)
+#               1 = only simplification
+#               2 = only smoothing
+#    inFile - filename of input ESRI Shapefile
+#    outFile - filename of output ESRI Shapefile
+#--------------------------------------------------------------------------------------------------------------
+
+def Generalize(scale,small_area,alg_type,inFile,outFile):   
+
     global DEL_AREA
     global TOL_LENGTH
     global SQR_TOL_LENGTH
@@ -433,83 +639,152 @@ def Generalize(scale,small_area,inFile,outFile):
     global ZERO_AREA
     
     DEL_AREA = (scale/1000)*(scale/1000)*small_area #small area in map units
-    TOL_LENGTH = scale/2300 #main paramater of the algorithm
+    TOL_LENGTH = scale/2300 #main paramater of the algorithm, determined from manually generalised maps
     SQR_TOL_LENGTH = TOL_LENGTH*TOL_LENGTH #squared main parameter of the algorithm
-    ZERO_EPSILON = 1E-12 # treat as zero
-    MIN_ANGLE = 150.*math.pi/180.
-    SQR_SMOOTH_LENGTH = 20.*SQR_TOL_LENGTH
-    ZERO_AREA = 1E-6 # treat as zero area
+    ZERO_EPSILON = 1E-12 # if less then value is considered as zero
+    MIN_ANGLE = 150.*math.pi/180. # min segments angle in smoothed line, increase to get even smoother lines with more vertices
+    SQR_SMOOTH_LENGTH = 20.*SQR_TOL_LENGTH # max segments length for smoothing, longer segments can form sharper angles then MIN_ANGLE
+    ZERO_AREA = 1E-6 # if less then value is considered as zero
     
+    #open input ESRI Shapefile
     driver = ogr.GetDriverByName('ESRI Shapefile')
     inDataSet = driver.Open(inFile, 0)
-    
     inLayer = inDataSet.GetLayer()
     
+    #create output ESRI Shapefile
     if os.path.exists(outFile):
         driver.DeleteDataSource(outFile)
     outDataSet = driver.CreateDataSource(outFile)
     outLayer = outDataSet.CreateLayer(inLayer.GetName(), geom_type=inLayer.GetGeomType())
 
-    # add fields
+    #copy fields to output 
     inLayerDefn = inLayer.GetLayerDefn()
     for i in range(0, inLayerDefn.GetFieldCount()):
         fieldDefn = inLayerDefn.GetFieldDefn(i)
         outLayer.CreateField(fieldDefn)
 
-    # get the output layer's feature definition
+    #get the output layer's feature definition, will be used for copying field values to output
     outLayerDefn = outLayer.GetLayerDefn()
-
+    
+    #loop through all input features and generalize them 
     for inFeature in inLayer:
-        geom = inFeature.GetGeometryRef()
+        gen = 0 #assume the feature should be omitted from output
+        geom = inFeature.GetGeometryRef() #get reference of feature geometry
+        
         if geom.GetGeometryName() == 'MULTIPOLYGON':
-            out_geom = ogr.Geometry(ogr.wkbMultiPolygon)
-            for i in range(0, geom.GetGeometryCount()): #iterate over polygons
-                poly = ogr.Geometry(ogr.wkbPolygon) 
-                g = geom.GetGeometryRef(i) #polygon can have multiple rings
+            out_geom = ogr.Geometry(ogr.wkbMultiPolygon) #create output geometry of given type
+            for i in range(0, geom.GetGeometryCount()): #iterate over polygons in multipolygon
+                poly = ogr.Geometry(ogr.wkbPolygon) #create output polygon geometry
+                g = geom.GetGeometryRef(i) # input polygon can have multiple rings
                 for j in range(0, g.GetGeometryCount()): #iterate over rings
                     ring = g.GetGeometryRef(j) #access to a ring (closed polyline)
-                    flag,simpl = Generalize_Ring(ring) 
-                    if flag == 1:
-                        flag,smooth = Smooth_Ring(simpl)
-                        poly.AddGeometry(smooth)
-                out_geom.AddGeometry(poly)                      
+                    
+                    #output: gen_ring=1 indicates that some geometry is preserved after generalisation
+                    #output: poly will receive all generalised rings in it
+                    #input: True means that rings are allways closed
+                    #input: first 0 means that ogrLinearRing is geometry type for creation
+                    #input: poly is reference to geometry in which new generalised geometry of right type will be stored
+                    #input: alg_type - generalisation (simplification+smoothing), simplification or smoothing
+                    #input: second 0 means that this is multigeometry (polygon with multiple rings)
+                    gen_ring,poly = Decide(ring,True,0,poly,alg_type,0) #perform generalisation
+                    
+                    #there were some geometry preserved, store this in gen so output feature will be created
+                    #some parts could be deleted due to too small area for given scale
+                    if gen_ring == 1:
+                        gen = 1
+                #add polygon to multipolygon                       
+                out_geom.AddGeometry(poly)  
+                
         elif geom.GetGeometryName() == 'POLYGON':
-            out_geom = ogr.Geometry(ogr.wkbPolygon) 
+            out_geom = ogr.Geometry(ogr.wkbPolygon) #create output geometry of given type
             for i in range(0, geom.GetGeometryCount()): #iterate over rings
-                g = geom.GetGeometryRef(i) #access to a ring (closed polyline)
-                flag,simpl = Generalize_Ring(g)
-                if flag == 1:
-                    flag,smooth = Smooth_Ring(simpl)
-                    out_geom.AddGeometry(smooth)
+                ring = geom.GetGeometryRef(i) #access to a ring (closed polyline)
+                
+                #output: gen_ring=1 indicates that some geometry is preserved after generalisation
+                #output: out_geom will receive all generalised rings in it
+                #input: True means that rings are allways closed
+                #input: first 0 means that ogrLinearRing is geometry type for creation
+                #input: out_geom is reference to geometry in which new generalised geometry of right type will be stored
+                #input: alg_type - generalisation (simplification+smoothing), simplification or smoothing
+                #input: second 0 means that this is multigeometry (polygon with multiple rings)
+                gen_ring,out_geom = Decide(ring,True,0,out_geom,alg_type,0) #perform generalisation
+
+                #there were some geometry preserved, store this in gen so output feature will be created
+                #some parts could be deleted due to too small area for given scale
+                if gen_ring == 1:
+                    gen = 1
+                    
         elif geom.GetGeometryName() == 'MULTILINESTRING':
-            out_geom = ogr.Geometry(ogr.wkbMultiLineString)
+            out_geom = ogr.Geometry(ogr.wkbMultiLineString) #create output geometry of given type
             for i in range(0, geom.GetGeometryCount()): #iterate over lines
-                g = geom.GetGeometryRef(i) 
-                flag,simpl = Generalize_Line(g) 
-                if flag == 1:
-                    flag,smooth = Smooth_Line(simpl)
-                    out_geom.AddGeometry(smooth)
+                line = geom.GetGeometryRef(i)
+                #check if it closed polyline, if so, generalize it as ring, which means 
+                #that neither vertex is considered as fixed
+                #if line is open, starting and ending points are preserved
+                ps = line.GetPoint(0)
+                pe = line.GetPoint(line.GetPointCount()-1)
+                closed = False
+                if (ps[0] == pe[0]) and (ps[1] == pe[1]):
+                    closed = True
+                    
+                #output: gen_line=1 indicates that some geometry is preserved after generalisation
+                #output: out_geom will receive all generalised lines in it
+                #input: closed indicates whether line is closed or not
+                #input: 1 means that ogrLineString is geometry type for creation
+                #input: out_geom is reference to geometry in which new generalised geometry of right type will be stored
+                #input: alg_type - generalisation (simplification+smoothing), simplification or smoothing
+                #input: 0 means that this is multigeometry (multilinestring with multiple linestrings)
+                gen_line,out_geom = Decide(line,closed,1,out_geom,alg_type,0)    
+
+                #there were some geometry preserved, store this in gen so output feature will be created  
+                #some parts could be deleted due to too small area for given scale                
+                if gen_line == 1:
+                    gen = 1
+                    
         elif geom.GetGeometryName() == 'LINESTRING':
-            line = ogr.Geometry(ogr.wkbLineString) 
-            flag,simpl = Generalize_Line(geom)
-            flag,out_geom = Smooth_Line(simpl)
-        outFeature = ogr.Feature(outLayerDefn)
-        # set the geometry and attribute
-        outFeature.SetGeometry(out_geom)
-        for i in range(0, outLayerDefn.GetFieldCount()):
-            outFeature.SetField(outLayerDefn.GetFieldDefn(i).GetNameRef(), inFeature.GetField(i))
-        # add the feature to the shapefile
-        outLayer.CreateFeature(outFeature)
-        # destroy the features and get the next input feature
-        outFeature.Destroy()
+            out_geom = ogr.Geometry(ogr.wkbLineString) #create output geometry of given type
+            #check if it closed polyline, if so, generalize it as ring, which means 
+            #that neither vertex is considered as fixed
+            #if line is open, starting and ending points are preserved
+            ps = geom.GetPoint(0)
+            pe = geom.GetPoint(geom.GetPointCount()-1)
+            closed = False
+            if (ps[0] == pe[0]) and (ps[1] == pe[1]):
+                closed = True
+                
+            #output: gen=1 indicates that geometry is preserved after generalisation
+            #output: out_geom will receive generalised line in it
+            #input: closed indicates whether line is closed or not
+            #input: 1 means that ogrLineString is geometry type for creation
+            #input: out_geom is reference to geometry in which new generalised geometry of right type will be stored
+            #input: alg_type - generalisation (simplification+smoothing), simplification or smoothing
+            #input: 1 means that this is single geometry (one linestring)
+            gen,out_geom = Decide(geom,closed,1,out_geom,alg_type,1) 
+        
+        #if some geometry is preserved after generalisation create output feature with 
+        #generalised geometry and copy attributes from input feature        
+        if gen == 1: 
+            outFeature = ogr.Feature(outLayerDefn)
+            #set the geometry 
+            outFeature.SetGeometry(out_geom)
+            #copy the attributes
+            for i in range(0, outLayerDefn.GetFieldCount()):
+                outFeature.SetField(outLayerDefn.GetFieldDefn(i).GetNameRef(), inFeature.GetField(i))
+            #add the feature to the shapefile
+            outLayer.CreateFeature(outFeature)
+            #destroy output feature
+            outFeature.Destroy()
+        #destroy input feature and get the next input feature    
         inFeature.Destroy()
         
-    #create .prj file
+    #create .prj file for output if CRS is attached to input layer
     spatialRef = inLayer.GetSpatialRef()
-    spatialRef.MorphToESRI()
-    file = open(os.path.splitext(outFile)[0]+'.prj', 'w')
-    file.write(spatialRef.ExportToWkt())
-    file.close()
-
+    if spatialRef is not None:
+        spatialRef.MorphToESRI()
+        file = open(os.path.splitext(outFile)[0]+'.prj', 'w')
+        file.write(spatialRef.ExportToWkt())
+        file.close()
+        
+    #destroy datasets which will also close files
     inDataSet.Destroy()
     outDataSet.Destroy()
