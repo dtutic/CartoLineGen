@@ -20,6 +20,7 @@
  *                                                                         *
  ***************************************************************************/
 """
+
 from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt4.QtGui import QAction, QIcon
 # Initialize Qt resources from file resources.py
@@ -32,6 +33,7 @@ import os.path
 import generalize
 from qgis.core import *
 import qgis
+import datetime
 
 class CartoLineGen:
     """QGIS Plugin Implementation."""
@@ -196,59 +198,55 @@ class CartoLineGen:
         #clear output filename
         self.dlg.dlg_file.setText('')
         #round canvas map scale to 1000, results of generalisation are not that much sensitive to precise scale
-        self.dlg.dlg_scale.setText(str(int(self.iface.mapCanvas().scale()/1000)*1000))
-        #connect counting of vertices when layer is changed in order to estimate time
+        self.dlg.dlg_scale.setText(str(int(self.iface.mapCanvas().scale()/1000+1e-12)*1000))
+        #connect counting of vertices when layer or selected features are changed in order to estimate time
         self.dlg.dlg_layer.currentIndexChanged.connect(self.count_vertices) 
+        self.dlg.dlg_selected.stateChanged.connect(self.count_vertices) 
         #count vertices if there is layer in project in order to show it when dialog is loaded
-        if self.dlg.dlg_layer.currentLayer() != None:
+        if self.dlg.dlg_layer.currentLayer() is None: #no input layer 
+            qgis.utils.iface.messageBar().pushMessage("Error", "No layer to generalize!", level=QgsMessageBar.CRITICAL, duration=10)
+            return -1
+        else:
             self.count_vertices()
         #execute dialog    
         result = self.dlg.exec_()
         if result:
-            #check if output filename is given
-            if self.dlg.dlg_file.text() != '':
+            #check if valid output filename is given
+            filePath = self.dlg.dlg_file.text()
+            if os.path.exists(filePath) or os.access(os.path.dirname(filePath), os.W_OK):
+                count = self.count_vertices()
+                info = "Performing generalisation. Started at "+str(datetime.datetime.now().time()).split('.')[0]+". It can take up to "+ str(int(count/400000)+1)+" min! Please wait until it finishes."
+                qgis.utils.iface.messageBar().pushMessage("Info", info, level=QgsMessageBar.INFO, duration=84600)
                 try:
                     self.generalize()
                 except:
                     qgis.utils.iface.messageBar().pushMessage("Error", "Can't generalize! Check geometry validity.", level=QgsMessageBar.CRITICAL, duration=10)
             else:        
-                qgis.utils.iface.messageBar().pushMessage("Error", "No output file given!", level=QgsMessageBar.CRITICAL, duration=10)
+                qgis.utils.iface.messageBar().pushMessage("Error", "Invalid output file given!", level=QgsMessageBar.CRITICAL, duration=10)
             
     def count_vertices(self):
         inLayer = self.dlg.dlg_layer.currentLayer()
-        if self.dlg.dlg_layer.currentLayer() != None:
-            if inLayer.selectedFeatureCount() > 0:
+        if inLayer is not None:
+            #check if only selected objects are to be generalized           
+            if self.dlg.dlg_selected.isChecked():
                 feat = inLayer.selectedFeatures()
             else:    
                 feat = inLayer.getFeatures()
-            count = 0
-            for feature in feat:
-                geom = feature.geometry()
-                if geom != None:                
-                    if geom.type() == QGis.Polygon: 
-                        if geom.isMultipart(): 
-                            polygons = geom.asMultiPolygon() 
-                        else: 
-                            polygons = [ geom.asPolygon() ] 
-                        for polygon in polygons: 
-                            for ring in polygon: 
-                                count += len(ring) 
-                    if geom.type() == QGis.Line: 
-                        if geom.isMultipart(): 
-                            polylines = geom.asMultiPolyline() 
-                        else: 
-                            polylines = [ geom.asPolyline() ] 
-                        for polyline in polylines: 
-                            count += len(polyline)             
+            #estimate number of vertices from wkbSize/16, it is much faster than counting vertices
+            count = sum([feature.geometry().wkbSize() for feature in feat])/16
+            #round estimated number of vertices to 100
+            count = int(count/100+1)*100
             if count > 0:
-                self.dlg.dlg_warning.setText(str(count)+" vertices. Generalisation can take up to "+ str(int(count/400000)+1)+" min!")
+                #estimate time needed for generalisation and warn user that it can take up a while
+                self.dlg.dlg_warning.setText("~"+str(count)+" vertices. Generalisation can take up to "+ str(int(count/400000)+1)+" min!")
+                return count
+            else:    
+                self.dlg.dlg_warning.setText("No features selected! Output file will be empty.")
 
     def generalize(self):
         inLayer = self.dlg.dlg_layer.currentLayer()
-        
-        if inLayer == None: #no input layer selected
-            return
-            
+        #check if layer is in projected CRS, current approach makes no sense in geographic coordinates
+        #if one still wants to generalize in geographic coordinates layer CRS should be changed manually to projected CRS
         if not inLayer.crs().geographicFlag():
             #create temporary shapefile filename, it will be used as input by external process "generalize.py" which uses GDAL/OGR
             inFile = os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.shp'
@@ -261,7 +259,7 @@ class CartoLineGen:
             error = QgsVectorFileWriter.writeAsVectorFormat(inLayer, inFile, "UTF-8", None, "ESRI Shapefile", onlySelected=True)
             if error != QgsVectorFileWriter.NoError:
                 qgis.utils.iface.messageBar().pushMessage("Error", "Can't create temporary copy of selected layer in "+inFile, level=QgsMessageBar.CRITICAL, duration=10)
-            #set selection to previous state
+            #set selection to previous state, in fact deselect object for no features were selected in first place
             if not sel:
                 inLayer.removeSelection()
             #scale is main parameter of algorithm    
@@ -274,10 +272,13 @@ class CartoLineGen:
                 area = 0            
             #set output filename    
             outFile = self.dlg.dlg_file.text()
+            #type of generalisation: simplification&smoothing = 0, only simplification =1 or only smoothing=2
+            alg_type = self.dlg.dlg_type.currentIndex()
             
             #call generalisation algorithm which is based on python GDAL/OGR API
-            generalize.Generalize(scale,area,inFile,outFile)
-            qgis.utils.iface.messageBar().pushMessage("Success", "Generalisation finished and data saved to "+outFile, level=QgsMessageBar.SUCCESS, duration=5)
+            generalize.Generalize(scale,area,alg_type,inFile,outFile)
+            qgis.utils.iface.messageBar().clearWidgets()
+            qgis.utils.iface.messageBar().pushMessage("Success", str(datetime.datetime.now().time()).split('.')[0]+" : Generalisation finished and data saved to "+outFile, level=QgsMessageBar.SUCCESS, duration=10)
             
             #check if to load output and add layer to map canvas
             if self.dlg.dlg_add.isChecked():
@@ -292,4 +293,5 @@ class CartoLineGen:
             os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.shx')
             os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.cpg')
         else:    
+            qgis.utils.iface.messageBar().clearWidgets()
             qgis.utils.iface.messageBar().pushMessage("Error", "Layer must be in projected coordinate reference system (CRS)!", level=QgsMessageBar.CRITICAL, duration=10)
