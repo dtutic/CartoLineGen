@@ -12,7 +12,11 @@ Institution: University of Zagreb, Faculty of Geodesy
 e-mail: dtutic@geof.hr
 Date: 27/05/2016
 
-The generalization combines simplification followed by smoothing. It is possible to apply only simplification or smoothing if needed.
+Since ver. 0.4. new simple algorithm for lines with orthogonal segments is added which can be usefull for buildings generalisation. 
+
+![alt tag](buildings.png)
+
+The typical generalization combines simplification followed by smoothing. It is possible to apply only simplification or smoothing if needed.
 
 ![alt tag](cartolinegen.png)
 
