@@ -226,7 +226,7 @@ class CartoLineGen:
             
     def count_vertices(self):
         inLayer = self.dlg.dlg_layer.currentLayer()
-        if inLayer is not None:
+        if inLayer is not None and inLayer.type() == 0: #Layer is vector
             #check if only selected objects are to be generalized           
             if self.dlg.dlg_selected.isChecked():
                 feat = inLayer.selectedFeatures()
@@ -242,6 +242,8 @@ class CartoLineGen:
                 return count
             else:    
                 self.dlg.dlg_warning.setText("No features selected! Output file will be empty.")
+        else:        
+            self.dlg.dlg_warning.setText("Please select a vector layer to generalize!")
 
     def generalize(self):
         inLayer = self.dlg.dlg_layer.currentLayer()
