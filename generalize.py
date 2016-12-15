@@ -34,8 +34,149 @@ def polygon_area_closed(a,b,c,d): #surveyors formula for 4 points
     return a[0]*(b[1]-d[1])+b[0]*(c[1]-a[1])+c[0]*(d[1]-b[1])+d[0]*(a[1]-c[1])
 
 def squared_length(p1,p2): #squared length of segment
-    return (p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1])    
+    return (p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1])   
 
+def segments_angle(p1, p2, p3): 
+    a1 = math.atan2(p1[1]-p2[1], p1[0]-p2[0])
+    a2 = math.atan2(p3[1]-p2[1], p3[0]-p2[0]) #angles from middle point to first and third point
+    if (a1 < 0.):
+        a1 += 2.*math.pi
+    if (a2 < 0.): 
+        a2 += 2.*math.pi #if angles are negative correct then to 0-2PI interval
+    if (a1 > a2): 
+        da = a1 - a2
+    else:
+        da = a2 - a1 # subtract smaller angle from larger angle
+    if (da > math.pi):
+        da = math.pi*2. - da; # correct the angle to interval 0-PI
+    return da
+
+    
+
+#------------------------------------------------------------------------------------------------------------------
+# Main simplification function for orthogonal segments
+# Takes four consecutive points forming three consecutive and perpendicular segments in line
+# Segments forms "S" shape, zig-zag line because this is part of line that is usefull to simplify. For example,
+# convex part of lines will be intact, as well as convex shapes.
+# Vertices p1 and p4 are replaced by new points pA and PB in a way that
+# area of input and output figure is preserved, and p2 and p3 is deleted.
+#
+# TODO: Preserve area when near orthogonal segments exists
+#------------------------------------------------------------------------------------------------------------------ 
+    
+def Simplify_Ortho(p1,p2,p3,p4): 
+    pA = np.zeros(2)
+    pB = np.zeros(2)
+    
+    d12 = math.sqrt(squared_length(p1,p2))
+    d23 = math.sqrt(squared_length(p2,p3))
+    d34 = math.sqrt(squared_length(p3,p4))
+    
+    dB = d12*d23/(d34+d12)
+    dA = d23 - dB
+    
+    v1A = math.atan2(p3[1]-p2[1],p3[0]-p2[0])
+    v4B = math.atan2(p2[1]-p3[1],p2[0]-p3[0])
+    
+    pA[0] = p1[0] + dA*math.cos(v1A)
+    pA[1] = p1[1] + dA*math.sin(v1A)
+    pB[0] = p4[0] + dB*math.cos(v4B)
+    pB[1] = p4[1] + dB*math.sin(v4B) 
+       
+    return 1,pA,pB
+    
+#-----------------------------------------------------------------------------------------------------------------
+# This functions simplifies lines with orthogonal segments. First and last points are same in output which preserves topology.
+# Local operator in function Simplify_Ortho is called first for the smallest segment in line which forms zig-zig with
+# its neighbouring segments, and after modification, the smallest segment in modified line is next candidate for
+# simplification.
+# This way line is almost always treated in the same order (exception can be multiple segments with minimal length)
+# and this is very useful for generalisation of duplicate lines, because such borders will remain very close, or
+# equal on some parts. Other advantage is that it gives kind of global property to generalisation, meaning that
+# line can be generalised multiple times through intermediate scales or directly to final smaller scale, and result 
+# should be same or very similar.
+#------------------------------------------------------------------------------------------------------------------  
+    
+def Simplify_Line_Ortho(g,closed,geom_type):
+    if closed:
+        input_area = g.Area()
+        if input_area < DEL_AREA:
+            return 0,g #area of ring is too small to keep on map   
+            
+    p_len = g.GetPointCount()
+    points = np.zeros((p_len,2))
+    j = 0
+    p = g.GetPoint(j)
+    points[j,0] = p[0]
+    points[j,1] = p[1]
+    for i in range(1, p_len):
+        p = g.GetPoint(i)
+        #remove duplicate neighbour points
+        if points[j,0] != p[0] or points[j,1] != p[1]:
+            j = j+1
+            points[j,0] = p[0]
+            points[j,1] = p[1]
+    p_len = j+1 #final number of points in point list
+    
+    #malformed linear geometry
+    if p_len <= 1:
+        return 0,g
+    #segment or two segments, nothing to generalize, return cleaned geometry    
+    if p_len <= 3:
+        line = ogr.Geometry(ogr.wkbLineString)    
+        for i in range (0,p_len):
+            line.AddPoint(points[i,0], points[i,1])
+        return -1,line
+        
+    #calculate squared segments lengths, algorithm always change line where shorthest segment is found
+    segments = np.zeros(p_len-1)
+    for i in range(0, p_len-1):
+        segments[i] = squared_length(points[i], points[i+1])
+    i = np.argmin(segments) #index of shorthest segment
+    min_s = np.amin(segments) #squared length of shorthest segment
+    while min_s < SQR_TOL_LENGTH and p_len > 3:  
+        if i > 0 and i < p_len-2: #we are not on first or last segment
+          if zig_zag(points[i-1],points[i],points[i+1],points[i+2]) and math.fabs(segments_angle(points[i-1],points[i],points[i+1])-math.pi*0.5) < math.pi*0.03 and math.fabs(segments_angle(points[i],points[i+1],points[i+2])-math.pi*0.5) < math.pi*0.03: #segments should be close to orthogonal +-5°
+            flag,pA,pB = Simplify_Ortho(points[i-1],points[i],points[i+1],points[i+2])
+            if flag == 1:
+                points[i-1] = pA
+                if closed and i == 1:
+                  points[p_len-1] = pA 
+                points[i+2] = pB
+                if closed and (i + 2 == p_len - 1):
+                  points[0] = pB 
+                points = np.delete(points,i+1,0)
+                points = np.delete(points,i,0)
+                segments = np.delete(segments,i)
+                segments = np.delete(segments,i)
+                p_len = p_len - 2
+                #calculate new segments length with new points
+                segments[i-1] = squared_length(pA, pB)
+                #recalculate neigbour segments in case they were set to 2*SQR_TOL_LENGTH
+                #check if close to starting/ending point of closed polyline
+                if i == 1 and p_len > 2:
+                    segments[i] = squared_length(points[i], points[i+1])
+                elif i == p_len-3 and p_len > 2:
+                    segments[i-2] = squared_length(points[i-2], points[i-1])
+                elif i > 1 and i < p_len-1 and p_len > 3:  
+                    segments[i-2] = squared_length(points[i-2], points[i-1])
+                    segments[i] = squared_length(points[i], points[i+1])
+          else:
+            segments[i] = 2*SQR_TOL_LENGTH
+        else:
+          segments[i] = 2*SQR_TOL_LENGTH
+        i = np.argmin(segments) #index of new shortest segment
+        min_s = np.amin(segments) #squared length of new shortest segment
+        
+    line = ogr.Geometry(ogr.wkbLineString)    
+    if closed and geom_type == 0:
+        line = ogr.Geometry(ogr.wkbLinearRing)    
+    for i in range (0,p_len):
+      line.AddPoint(points[i,0], points[i,1])
+        
+    return 1,line
+    
+    
 #------------------------------------------------------------------------------------------------------------------
 # Main simplification function
 # Takes four consecutive points forming three consecutive segments in line
@@ -117,7 +258,7 @@ def Simplify_Ring(g,geom_type):
     for i in range(1, p_len):
         p = g.GetPoint(i)
         #remove duplicate neighbour points
-        if points[j,0] != p[0] and points[j,1] != p[1]:
+        if points[j,0] != p[0] or points[j,1] != p[1]:
             j = j+1
             points[j,0] = p[0]
             points[j,1] = p[1]
@@ -240,7 +381,7 @@ def Simplify_Line(g):
     for i in range(1, p_len):
         p = g.GetPoint(i)
         #remove duplicate neighbour points
-        if points[j,0] != p[0] and points[j,1] != p[1]:
+        if points[j,0] != p[0] or points[j,1] != p[1]:
             j = j+1
             points[j,0] = p[0]
             points[j,1] = p[1]
@@ -263,7 +404,7 @@ def Simplify_Line(g):
            
     i = np.argmin(segments) #index of shorthest segment
     min_s = np.amin(segments) #squared length of shorthest segment
-    while min_s < SQR_TOL_LENGTH and p_len > 4:            
+    while min_s < SQR_TOL_LENGTH and p_len > 3:            
         if i>0 and i<p_len-2: #we are not on first or last segment
           if zig_zag(points[i-1],points[i],points[i+1],points[i+2]):
             flag,point = Simplify(points[i-1],points[i],points[i+1],points[i+2])
@@ -277,13 +418,13 @@ def Simplify_Line(g):
                 segments[i] = squared_length(points[i], points[i+1])
                 #recalculate neigbour segments in case they were set to 2*SQR_TOL_LENGTH
                 #check if close to starting/ending point of closed polyline
-                if i == 1:
-                    segments[i+1] = squared_length(points[i+1], points[i+2])
-                elif i == p_len-2:
-                    segments[i-2] = squared_length(points[i-2], points[i-1])
-                else:  
-                    segments[i-2] = squared_length(points[i-2], points[i-1])
-                    segments[i+1] = squared_length(points[i+1], points[i+2])
+                #if i == 1:
+                #    segments[i+1] = squared_length(points[i+1], points[i+2])
+                #elif i == p_len-2:
+                #    segments[i-2] = squared_length(points[i-2], points[i-1])
+                #else:  
+                #    segments[i-2] = squared_length(points[i-2], points[i-1])
+                #    segments[i+1] = squared_length(points[i+1], points[i+2])
           else:
             segments[i] = 2*SQR_TOL_LENGTH
         else:
@@ -296,21 +437,6 @@ def Simplify_Line(g):
         line.AddPoint(points[i,0], points[i,1])
         
     return 1,line
-
-def segments_angle(p1, p2, p3): 
-    a1 = math.atan2(p1[1]-p2[1], p1[0]-p2[0])
-    a2 = math.atan2(p3[1]-p2[1], p3[0]-p2[0]) #angles from middle point to first and third point
-    if (a1 < 0.):
-        a1 += 2.*math.pi
-    if (a2 < 0.): 
-        a2 += 2.*math.pi #if angles are negative correct then to 0-2PI interval
-    if (a1 > a2): 
-        da = a1 - a2
-    else:
-        da = a2 - a1 # subtract smaller angle from larger angle
-    if (da > math.pi):
-        da = math.pi*2. - da; # correct the angle to interval 0-PI
-    return da
 
 #------------------------------------------------------------------------------------------------------------------
 # Main smoothing function.
@@ -385,7 +511,7 @@ def Smooth_Ring(g,geom_type):
     for i in range(1, p_len):
         p = g.GetPoint(i)
         #remove duplicate neighbour points
-        if points[j,0] != p[0] and points[j,1] != p[1]:
+        if points[j,0] != p[0] or points[j,1] != p[1]:
             j = j+1
             points[j,0] = p[0]
             points[j,1] = p[1]
@@ -495,7 +621,7 @@ def Smooth_Line(g):
     for i in range(1, p_len):
         p = g.GetPoint(i)
         #remove duplicate neighbour points
-        if points[j,0] != p[0] and points[j,1] != p[1]:
+        if points[j,0] != p[0] or points[j,1] != p[1]:
             j = j+1
             points[j,0] = p[0]
             points[j,1] = p[1]
@@ -578,7 +704,6 @@ def Decide(g,closed,g_type,out_geom,alg_type,single_line):
                 flag,smooth = Smooth_Ring(simpl,g_type) #g_type == 0 means ring and g_type=1 means closed line
             else:
                 flag,smooth = Smooth_Line(simpl) #flag == 0 means that geometry should be deleted from output     
-                #print "Dosao u smooth"                
             if flag == 1 or flag == -1: #flag == -1 means that geometry was not changed by smoothing but it should be preserved in output
                 if single_line: #single geometry, direct assignment
                     out_geom = smooth
@@ -609,6 +734,14 @@ def Decide(g,closed,g_type,out_geom,alg_type,single_line):
             else:    
                 out_geom.AddGeometry(smooth)
             gen = 1
+    if alg_type == 3: #perform simplification of orthogonal segments
+        flag,simpl = Simplify_Line_Ortho(g,closed,g_type) 
+        if flag == 1 or flag == -1:
+            if single_line:
+                out_geom = simpl
+            else:    
+                out_geom.AddGeometry(simpl)
+            gen = 1
            
     return gen,out_geom
     
@@ -624,6 +757,7 @@ def Decide(g,closed,g_type,out_geom,alg_type,single_line):
 #    alg_type - 0 = full generalisation (simplification and smoothing)
 #               1 = only simplification
 #               2 = only smoothing
+#               3 = orthogonal segments
 #    inFile - filename of input ESRI Shapefile
 #    outFile - filename of output ESRI Shapefile
 #--------------------------------------------------------------------------------------------------------------
@@ -637,9 +771,9 @@ def Generalize(scale,small_area,alg_type,inFile,outFile):
     global MIN_ANGLE
     global SQR_SMOOTH_LENGTH
     global ZERO_AREA
-    
+
     DEL_AREA = (scale/1000)*(scale/1000)*small_area #small area in map units
-    TOL_LENGTH = scale/2300 #main paramater of the algorithm, determined from manually generalised maps
+    TOL_LENGTH = scale/5000 #main paramater of the algorithm, determined from manually generalised maps
     SQR_TOL_LENGTH = TOL_LENGTH*TOL_LENGTH #squared main parameter of the algorithm
     ZERO_EPSILON = 1E-12 # if less then value is considered as zero
     MIN_ANGLE = 150.*math.pi/180. # min segments angle in smoothed line, increase to get even smoother lines with more vertices
@@ -670,7 +804,6 @@ def Generalize(scale,small_area,alg_type,inFile,outFile):
     for inFeature in inLayer:
         gen = 0 #assume the feature should be omitted from output
         geom = inFeature.GetGeometryRef() #get reference of feature geometry
-        
         if geom.GetGeometryName() == 'MULTIPOLYGON':
             out_geom = ogr.Geometry(ogr.wkbMultiPolygon) #create output geometry of given type
             for i in range(0, geom.GetGeometryCount()): #iterate over polygons in multipolygon
@@ -751,7 +884,6 @@ def Generalize(scale,small_area,alg_type,inFile,outFile):
             closed = False
             if (ps[0] == pe[0]) and (ps[1] == pe[1]):
                 closed = True
-                
             #output: gen=1 indicates that geometry is preserved after generalisation
             #output: out_geom will receive generalised line in it
             #input: closed indicates whether line is closed or not
