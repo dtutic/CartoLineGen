@@ -51,6 +51,9 @@
      <height>27</height>
     </rect>
    </property>
+   <property name="filters">
+    <set>QgsMapLayerProxyModel::LineLayer|QgsMapLayerProxyModel::PolygonLayer</set>
+   </property>
   </widget>
   <widget class="QLabel" name="label_2">
    <property name="geometry">
@@ -208,6 +211,11 @@
      <string>Smoothing</string>
     </property>
    </item>
+   <item>
+    <property name="text">
+     <string>Orthogonal Segments</string>
+    </property>
+   </item>
   </widget>
   <widget class="QLabel" name="label_4">
    <property name="geometry">
@@ -228,6 +236,8 @@
    <class>QgsMapLayerComboBox</class>
    <extends>QComboBox</extends>
    <header>qgis.gui</header>
+   <header>qgsmaplayercombobox.h</header>
+   <header>qgsmaplayerproxymodel.h</header>
   </customwidget>
  </customwidgets>
  <resources/>
