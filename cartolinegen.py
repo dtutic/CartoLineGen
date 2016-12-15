@@ -28,7 +28,7 @@ import resources
 # Import the code for the dialog
 from cartolinegen_dialog import CartoLineGenDialog
 from PyQt4.QtGui import QFileDialog
-from qgis.gui import QgsMessageBar, QgsMapLayerComboBox
+from qgis.gui import QgsMessageBar
 import os.path
 import generalize
 from qgis.core import *
@@ -201,9 +201,17 @@ class CartoLineGen:
         self.dlg.dlg_scale.setText(str(int(self.iface.mapCanvas().scale()/1000+1e-12)*1000))
         #connect counting of vertices when layer or selected features are changed in order to estimate time
         self.dlg.dlg_layer.currentIndexChanged.connect(self.count_vertices) 
-        self.dlg.dlg_selected.stateChanged.connect(self.count_vertices) 
+        self.dlg.dlg_selected.stateChanged.connect(self.count_vertices)
+        layers = QgsMapLayerRegistry.instance().mapLayers().values()
+        self.dlg.dlg_layer.clear()
+        for layer in layers:
+            if layer.type() == QgsMapLayer.VectorLayer and (layer.geometryType() == QGis.Line or layer.geometryType() == QGis.Polygon):
+                self.dlg.dlg_layer.addItem( layer.name(), layer ) 
+        
         #count vertices if there is layer in project in order to show it when dialog is loaded
-        if self.dlg.dlg_layer.currentLayer() is None: #no input layer 
+        index = self.dlg.dlg_layer.currentIndex()
+        layer = self.dlg.dlg_layer.itemData(index)
+        if layer is None: #no input layer 
             qgis.utils.iface.messageBar().pushMessage("Error", "No layer to generalize!", level=QgsMessageBar.CRITICAL, duration=10)
             return -1
         else:
@@ -225,7 +233,8 @@ class CartoLineGen:
                 qgis.utils.iface.messageBar().pushMessage("Error", "Invalid output file given!", level=QgsMessageBar.CRITICAL, duration=10)
             
     def count_vertices(self):
-        inLayer = self.dlg.dlg_layer.currentLayer()
+        index = self.dlg.dlg_layer.currentIndex()
+        inLayer = self.dlg.dlg_layer.itemData(index)
         if inLayer is not None and inLayer.type() == 0: #Layer is vector
             #check if only selected objects are to be generalized           
             if self.dlg.dlg_selected.isChecked():
@@ -246,7 +255,8 @@ class CartoLineGen:
             self.dlg.dlg_warning.setText("Please select a vector layer to generalize!")
 
     def generalize(self):
-        inLayer = self.dlg.dlg_layer.currentLayer()
+        index = self.dlg.dlg_layer.currentIndex()
+        inLayer = self.dlg.dlg_layer.itemData(index)
         #check if layer is in projected CRS, current approach makes no sense in geographic coordinates
         #if one still wants to generalize in geographic coordinates layer CRS should be changed manually to projected CRS
         if not inLayer.crs().geographicFlag():
