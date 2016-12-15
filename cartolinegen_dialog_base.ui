@@ -42,19 +42,6 @@
     <string>Input line or polygon layer to generalise:</string>
    </property>
   </widget>
-  <widget class="QgsMapLayerComboBox" name="dlg_layer">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>50</y>
-     <width>401</width>
-     <height>27</height>
-    </rect>
-   </property>
-   <property name="filters">
-    <set>QgsMapLayerProxyModel::LineLayer|QgsMapLayerProxyModel::PolygonLayer</set>
-   </property>
-  </widget>
   <widget class="QLabel" name="label_2">
    <property name="geometry">
     <rect>
@@ -230,16 +217,17 @@
     <string>Generalisation type:</string>
    </property>
   </widget>
+  <widget class="QComboBox" name="dlg_layer">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>50</y>
+     <width>401</width>
+     <height>21</height>
+    </rect>
+   </property>
+  </widget>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>QgsMapLayerComboBox</class>
-   <extends>QComboBox</extends>
-   <header>qgis.gui</header>
-   <header>qgsmaplayercombobox.h</header>
-   <header>qgsmaplayerproxymodel.h</header>
-  </customwidget>
- </customwidgets>
  <resources/>
  <connections>
   <connection>
