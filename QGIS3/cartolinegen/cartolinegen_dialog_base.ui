@@ -78,35 +78,6 @@
     <string>Use only selected features</string>
    </property>
   </widget>
-  <widget class="QLineEdit" name="dlg_file">
-   <property name="enabled">
-    <bool>true</bool>
-   </property>
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>273</y>
-     <width>301</width>
-     <height>22</height>
-    </rect>
-   </property>
-  </widget>
-  <widget class="QPushButton" name="dlg_browse">
-   <property name="enabled">
-    <bool>true</bool>
-   </property>
-   <property name="geometry">
-    <rect>
-     <x>330</x>
-     <y>266</y>
-     <width>93</width>
-     <height>30</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Browse</string>
-   </property>
-  </widget>
   <widget class="QCheckBox" name="dlg_add">
    <property name="enabled">
     <bool>true</bool>
@@ -227,7 +198,24 @@
     </rect>
    </property>
   </widget>
+  <widget class="QgsFileWidget" name="dlg_file">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>270</y>
+     <width>401</width>
+     <height>41</height>
+    </rect>
+   </property>
+  </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QgsFileWidget</class>
+   <extends>QWidget</extends>
+   <header>qgis.gui</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections>
   <connection>
