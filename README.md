@@ -12,7 +12,7 @@ Institution: University of Zagreb, Faculty of Geodesy
 e-mail: dtutic@geof.hr
 Date: 27/05/2016
 
-Contributors: Nikola Mrkalj, University of Zagreb, Faculty of Geodesy (help with plugin migration to QGIS3)
+Contributor(s): Nikola Mrkalj, University of Zagreb, Faculty of Geodesy (help with plugin migration to QGIS3)
 
 Since ver. 0.4. new simple algorithm for lines with orthogonal segments is added which can be usefull for buildings generalisation. 
 
