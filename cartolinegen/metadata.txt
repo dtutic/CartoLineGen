@@ -1,0 +1,45 @@
+# This file contains metadata for your plugin. Since 
+# version 2.0 of QGIS this is the proper way to supply 
+# information about a plugin. The old method of 
+# embedding metadata in __init__.py will 
+# is no longer supported since version 2.0.
+
+# This file should be included when you package your plugin.# Mandatory items:
+
+[general]
+name=Cartographic Line Generalization
+qgisMinimumVersion=3.0
+description=Generalize lines suitable for presentation on printed or screen maps.
+version=3.0
+author=Drazen Tutic, Faculty of Geodesy, University of Zagreb
+email=dtutic@geof.hr
+
+about=Algorithm gives lines (contours, coastlines, rivers, buildings etc.) on map with good geometrical and visual properties suitable for presentation on paper or screen maps. Level of generalization is controlled only by map scale making it very simple to use. If the result still looks too detailed or too coarse for some purpose, just change the scale parameter. It has distinct property of area preservation of features. This ensures that polygons do not collapse to lines or points, and also ensures closeness of input and generalized line. Nevertheless, topological issues are possible, e.g. self-intersections or intersections of features. The typical generalization combines simplification followed by smoothing. Generalization algorithms are based on area preserving approach known from generalization theory. This simulates manual generalization, and parameters of the algorithms were defined by analysing manually generalized lines in different scales.
+   
+   TIPS:
+   - Input vector data must be in projected coordinate system.
+   - Default scale for generalization is scale of current map view, change if necessary.
+   - For buildings (or predominantly rectangular lines or polygons set algorithm to "Orthogonal segments".
+   - If "Remove small areas" is selected, algorithm will automatically delete small areal objects for given scale. One can do manual filtering of small objects by area and appropriate threshold, too.
+
+tracker=http://github.com/geof-osgl/CartoLineGen/issues
+repository=http://github.com/geof-osgl/CartoLineGen
+# End of mandatory metadata
+
+# Recommended items:
+
+# Uncomment the following line and add your changelog:
+changelog=CartoLineGen plugin for QGIS 3
+
+# Tags are comma separated with spaces allowed
+tags=generalization, simplification, smoothing, area preserving, cartography
+
+homepage=http://github.com/geof-osgl/CartoLineGen
+category=Plugins
+icon=icon.png
+# experimental flag
+experimental=False
+
+# deprecated flag (applies to the whole plugin, not just a single version)
+deprecated=False
+
