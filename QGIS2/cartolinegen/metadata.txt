@@ -44,9 +44,9 @@ changelog=Version 0.4
 # Tags are comma separated with spaces allowed
 tags=generalization, simplification, smoothing, area preserving, cartography
 
-homepage=http://dtutic.github.io/CartoLineGen/
-tracker=http://github.com/dtutic/CartoLineGen/issues
-repository=http://github.com/dtutic/CartoLineGen
+homepage=http://github.com/geof-osgl/CartoLineGen
+tracker=http://github.com/geof-osgl/CartoLineGen/issues
+repository=http://github.com/geof-osgl/CartoLineGen
 icon=icon.png
 # experimental flag
 experimental=False
