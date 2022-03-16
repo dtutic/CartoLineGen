@@ -20,8 +20,12 @@
  *                                                                         *
  ***************************************************************************/
 """
+try:
+    from osgeo import ogr
+except ImportError:
+    import ogr
 
-import ogr,sys,math,random,os
+import sys,math,random,os
 import numpy as np
 
 def zig_zag(a,b,c,d): #returns true if three segments form zig-zag
