@@ -8,8 +8,8 @@
                               -------------------
         begin                : 2018-06-19
         git sha              : $Format:%H$
-        copyright            : (C) 2018 by Drazen Tutic / Faculty of Geodesy, University of Zagreb
-        email                : dtutic@geof.hr
+        copyright            : (C) 2022 by Drazen Tutic
+        email                : dtutic@north2south.eu
  ***************************************************************************/
 
 /***************************************************************************
@@ -25,6 +25,8 @@ from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
 
+
+
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
@@ -33,14 +35,16 @@ import os.path
 
 from PyQt5.QtWidgets import QFileDialog
 from qgis.gui import QgsMessageBar
-from .generalize import Generalize
+
+from . import generalize
+#from .generalize import initialize, Generalize, progress_changed
 from qgis.core import *
 import qgis
 import datetime
 
 class CartoLineGen:
     """QGIS Plugin Implementation."""
-
+   
     def __init__(self, iface):
         """Constructor.
 
@@ -202,7 +206,7 @@ class CartoLineGen:
         layers = QgsProject.instance().mapLayers().values()
         self.dlg.dlg_layer.clear()
         for layer in layers:
-            if layer.type() == QgsMapLayer.VectorLayer and (layer.geometryType() == QgsWkbTypes.LineString or layer.geometryType() == QgsWkbTypes.Polygon):
+            if layer.type() == QgsMapLayer.VectorLayer and (layer.geometryType() == QgsWkbTypes.GeometryType.LineGeometry or layer.geometryType() == QgsWkbTypes.GeometryType.PolygonGeometry):
                 self.dlg.dlg_layer.addItem( layer.name(), layer ) 
         #count vertices if there is layer in project in order to show it when dialog is loaded
         layer = self.dlg.dlg_layer.itemData(self.dlg.dlg_layer.currentIndex())
@@ -216,16 +220,14 @@ class CartoLineGen:
         if result:
             #check if valid output filename is given
             filePath = self.dlg.dlg_file.filePath()
-            if os.path.exists(filePath) or os.access(os.path.dirname(filePath), os.W_OK):
-                count = self.count_vertices()
-                info = "Performing generalisation. Started at "+str(datetime.datetime.now().time()).split('.')[0]+". It can take up to "+ str(int(count/400000)+1)+" min! Please wait until it finishes."
-                qgis.utils.iface.messageBar().pushMessage("Info", info, level=Qgis.Info, duration=84600)
-                try:
-                    self.generalize()
-                except:
-                    qgis.utils.iface.messageBar().pushMessage("Error", "Can't generalize! Check geometry validity.", level=Qgis.Critical, duration=10)
-            else:        
-                qgis.utils.iface.messageBar().pushMessage("Error", "Invalid output file given!", level=Qgis.Critical, duration=10)
+            self.generalize()
+            #if os.path.exists(filePath) or os.access(os.path.dirname(filePath), os.W_OK):
+            #    try:
+            #        self.generalize()
+            #    except:
+            #        qgis.utils.iface.messageBar().pushMessage("Error", "Can't generalize! Check geometry validity.", level=Qgis.Critical, duration=10)
+            #else:        
+            #    qgis.utils.iface.messageBar().pushMessage("Error", "Invalid output file given!", level=Qgis.Critical, duration=10)
             
     def count_vertices(self):
         inLayer = self.dlg.dlg_layer.itemData(self.dlg.dlg_layer.currentIndex())
@@ -248,21 +250,27 @@ class CartoLineGen:
         else:        
             self.dlg.dlg_warning.setText("Please select a vector layer to generalize!")
 
+   
     def generalize(self):
+
         inLayer = self.dlg.dlg_layer.itemData(self.dlg.dlg_layer.currentIndex())
         #check if layer is in projected CRS, current approach makes no sense for geographic coordinates
         #if one still wants to generalize in geographic coordinates layer CRS should be changed manually to projected CRS
         if not inLayer.crs().isGeographic():
             #create temporary shapefile filename, it will be used as input by external process "generalize.py" which uses GDAL/OGR
-            inFile = os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.shp'
+            inFile = os.path.dirname(inLayer.dataProvider().dataSourceUri())+'/'+inLayer.sourceName()+'_temp.shp'
             #check if only selected objects are to be generalized           
             sel = self.dlg.dlg_selected.isChecked()
             #sometimes layer can have malformed geometries, so select all valid features for save
             if not sel:
                 inLayer.selectAll()                  
-            #save to temporary file because GDAL/OGR functions are used to access geometries and write generalised lines    
-            error = QgsVectorFileWriter.writeAsVectorFormat(inLayer, inFile, "UTF-8", inLayer.crs(), "ESRI Shapefile", True)
-            if error != QgsVectorFileWriter.NoError:
+            #save to temporary file because GDAL/OGR functions are used to access geometries and write generalised lines
+            options = QgsVectorFileWriter.SaveVectorOptions()
+            #options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
+            options.driverName = 'ESRI Shapefile'     
+            context = QgsProject.instance().transformContext()
+            error = QgsVectorFileWriter.writeAsVectorFormatV3(inLayer, inFile, context, options)
+            if error[0] != 0:
                 qgis.utils.iface.messageBar().pushMessage("Error", "Can't create temporary copy of selected layer in "+inFile, level=Qgis.Critical, duration=10)
             #set selection to previous state, in fact deselect object if no features were selected in the first place
             if not sel:
@@ -280,10 +288,22 @@ class CartoLineGen:
             #type of generalisation: simplification&smoothing = 0, only simplification =1 or only smoothing=2
             alg_type = self.dlg.dlg_type.currentIndex()
             
-            #call generalisation algorithm which is based on python GDAL/OGR API
-            print(scale, area,alg_type,inFile,outFile)
-            Generalize(scale,area,alg_type,inFile,outFile)
+            #setup and show progress bar
+            generalize.initialize()
             qgis.utils.iface.messageBar().clearWidgets()
+            progressMessageBar = qgis.utils.iface.messageBar()
+            progressMessageBar.pushWidget(generalize.progressbar)
+            qgis.utils.iface.mainWindow().repaint()   
+            f = QgsProcessingFeedback()
+            f.progressChanged.connect(generalize.progress_changed)
+            
+            #call generalisation algorithm which is based on python GDAL/OGR API
+            #print(scale, area,alg_type,inFile,outFile)
+            generalize.Generalize(scale,area,alg_type,inFile,outFile)
+            
+            #show results message
+            qgis.utils.iface.messageBar().clearWidgets()
+            qgis.utils.iface.mainWindow().repaint()   
             qgis.utils.iface.messageBar().pushMessage("Success", str(datetime.datetime.now().time()).split('.')[0]+" : Generalisation finished and data saved to "+outFile, level=Qgis.Success, duration=10)
             
             #check if to load output and add layer to map canvas
@@ -292,12 +312,11 @@ class CartoLineGen:
                 if not outLayer:
                     qgis.utils.iface.messageBar().pushMessage("Error", "Can't open generalised layer!", level=Qgis.Critical, duration=10)
             #remove temp files
-            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.dbf')
-            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.prj')
-            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.qpj')
-            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.shp')
-            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.shx')
-            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'temp.cpg')
+            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'/'+inLayer.sourceName()+'_temp.dbf')
+            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'/'+inLayer.sourceName()+'_temp.prj')
+            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'/'+inLayer.sourceName()+'_temp.shp')
+            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'/'+inLayer.sourceName()+'_temp.shx')
+            os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'/'+inLayer.sourceName()+'_temp.cpg')
         else:    
             qgis.utils.iface.messageBar().clearWidgets()
             qgis.utils.iface.messageBar().pushMessage("Error", "Layer must be in projected coordinate reference system (CRS)!", level=Qgis.Critical, duration=10)

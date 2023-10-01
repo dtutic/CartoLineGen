@@ -8,11 +8,11 @@
 
 [general]
 name=Cartographic Line Generalization
-qgisMinimumVersion=3.0
+qgisMinimumVersion=3.2
 description=Generalize lines suitable for presentation on printed or screen maps.
-version=3.0
-author=Drazen Tutic, Faculty of Geodesy, University of Zagreb
-email=dtutic@geof.hr
+version=3.2.2
+author=Drazen Tutic
+email=dtutic@north2south.eu
 
 about=Algorithm gives lines (contours, coastlines, rivers, buildings etc.) on map with good geometrical and visual properties suitable for presentation on paper or screen maps. Level of generalization is controlled only by map scale making it very simple to use. If the result still looks too detailed or too coarse for some purpose, just change the scale parameter. It has distinct property of area preservation of features. This ensures that polygons do not collapse to lines or points, and also ensures closeness of input and generalized line. Nevertheless, topological issues are possible, e.g. self-intersections or intersections of features. The typical generalization combines simplification followed by smoothing. Generalization algorithms are based on area preserving approach known from generalization theory. This simulates manual generalization, and parameters of the algorithms were defined by analysing manually generalized lines in different scales.
    
@@ -22,19 +22,23 @@ about=Algorithm gives lines (contours, coastlines, rivers, buildings etc.) on ma
    - For buildings (or predominantly rectangular lines or polygons set algorithm to "Orthogonal segments".
    - If "Remove small areas" is selected, algorithm will automatically delete small areal objects for given scale. One can do manual filtering of small objects by area and appropriate threshold, too.
 
-tracker=http://github.com/geof-osgl/CartoLineGen/issues
-repository=http://github.com/geof-osgl/CartoLineGen
+tracker=http://github.com/dtutic/CartoLineGen/issues
+repository=http://github.com/dtutic/CartoLineGen
 # End of mandatory metadata
 
 # Recommended items:
 
 # Uncomment the following line and add your changelog:
-changelog=CartoLineGen plugin for QGIS 3
+changelog=CartoLineGen plugin for QGIS 3.2.0
+    
+    v.3.0.1 Fixed geometry type check to detect lines or polygons
+    v.3.2.1 Updated to work with QGIS >3.2.0
+    v.3.2.2 Fixed bug when repeated calls are done
 
 # Tags are comma separated with spaces allowed
 tags=generalization, simplification, smoothing, area preserving, cartography
 
-homepage=http://github.com/geof-osgl/CartoLineGen
+homepage=http://github.com/dtutic/CartoLineGen
 category=Plugins
 icon=icon.png
 # experimental flag

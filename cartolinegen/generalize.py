@@ -7,8 +7,8 @@
                               -------------------
         begin                : 2016-05-25
         git sha              : $Format:%H$
-        copyright            : (C) 2016 by Dražen Tutić, University of Zagreb, Faculty of Geodesy
-        email                : dtutic@geof.hr
+        copyright            : (C) 2022 by Dražen Tutić
+        email                : dtutic@north2south.eu
  ***************************************************************************/
 
 /***************************************************************************
@@ -24,9 +24,16 @@ try:
     from osgeo import ogr
 except ImportError:
     import ogr
-
+    
 import sys,math,random,os
 import numpy as np
+from PyQt5.QtWidgets import QProgressBar
+
+
+def initialize():
+    global progressbar
+    progressbar = QProgressBar()
+
 
 def zig_zag(a,b,c,d): #returns true if three segments form zig-zag
     return (a[1]*(c[0]-b[0])+b[1]*(a[0]-c[0])+c[1]*(b[0]-a[0]))*(b[1]*(d[0]-c[0])+c[1]*(b[0]-d[0])+d[1]*(c[0]-b[0])) < -ZERO_EPSILON
@@ -748,6 +755,8 @@ def Decide(g,closed,g_type,out_geom,alg_type,single_line):
             gen = 1
            
     return gen,out_geom
+
+
     
 #-------------------------------------------------------------------------------------------------------------
 # Main function called for a generalisation of geometry in ESRI Shapefile
@@ -766,8 +775,12 @@ def Decide(g,closed,g_type,out_geom,alg_type,single_line):
 #    outFile - filename of output ESRI Shapefile
 #--------------------------------------------------------------------------------------------------------------
 
+def progress_changed(progress):
+    progressbar.setValue(progress)     
+    
 def Generalize(scale,small_area,alg_type,inFile,outFile):   
 
+    
     global DEL_AREA
     global TOL_LENGTH
     global SQR_TOL_LENGTH
@@ -803,11 +816,16 @@ def Generalize(scale,small_area,alg_type,inFile,outFile):
 
     #get the output layer's feature definition, will be used for copying field values to output
     outLayerDefn = outLayer.GetLayerDefn()
-    
+    num_of_objects = inLayer.GetFeatureCount()
+    obj_index = 0
     #loop through all input features and generalize them 
     for inFeature in inLayer:
+        #update progress bar 
+        obj_index = obj_index + 1
+        progress_changed(obj_index/num_of_objects*100)
+
         gen = 0 #assume the feature should be omitted from output
-        geom = inFeature.GetGeometryRef() #get reference of feature geometry
+        geom = inFeature.geometry() #get reference of feature geometry
         if geom.GetGeometryName() == 'MULTIPOLYGON':
             out_geom = ogr.Geometry(ogr.wkbMultiPolygon) #create output geometry of given type
             for i in range(0, geom.GetGeometryCount()): #iterate over polygons in multipolygon
@@ -880,7 +898,7 @@ def Generalize(scale,small_area,alg_type,inFile,outFile):
                     
         elif geom.GetGeometryName() == 'LINESTRING':
             out_geom = ogr.Geometry(ogr.wkbLineString) #create output geometry of given type
-            #check if it closed polyline, if so, generalize it as ring, which means 
+            # check if it closed polyline, if so, generalize it as ring, which means 
             #that neither vertex is considered as fixed
             #if line is open, starting and ending points are preserved
             ps = geom.GetPoint(0)
