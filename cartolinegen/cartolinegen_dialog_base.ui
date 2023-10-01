@@ -6,211 +6,148 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>449</width>
-    <height>434</height>
+    <width>442</width>
+    <height>451</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Cartographic Line Generalisation - CartoLineGen</string>
   </property>
-  <widget class="QDialogButtonBox" name="button_box">
-   <property name="geometry">
-    <rect>
-     <x>80</x>
-     <y>380</y>
-     <width>341</width>
-     <height>32</height>
-    </rect>
-   </property>
-   <property name="orientation">
-    <enum>Qt::Horizontal</enum>
-   </property>
-   <property name="standardButtons">
-    <set>QDialogButtonBox::Close|QDialogButtonBox::Ok</set>
-   </property>
-  </widget>
-  <widget class="QLabel" name="label">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>20</y>
-     <width>401</width>
-     <height>16</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Input line or polygon layer to generalise:</string>
-   </property>
-  </widget>
-  <widget class="QLabel" name="label_2">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>130</y>
-     <width>171</width>
-     <height>16</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Map scale denominator:</string>
-   </property>
-  </widget>
-  <widget class="QLineEdit" name="dlg_scale">
-   <property name="geometry">
-    <rect>
-     <x>190</x>
-     <y>124</y>
-     <width>151</width>
-     <height>26</height>
-    </rect>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="dlg_selected">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>90</y>
-     <width>191</width>
-     <height>20</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Use only selected features</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="dlg_add">
-   <property name="enabled">
-    <bool>true</bool>
-   </property>
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>313</y>
-     <width>151</width>
-     <height>20</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Add result to canvas</string>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
-  </widget>
-  <widget class="QLabel" name="label_3">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>247</y>
-     <width>251</width>
-     <height>16</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Specify output file:</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="dlg_remove_small">
-   <property name="geometry">
-    <rect>
-     <x>230</x>
-     <y>90</y>
-     <width>191</width>
-     <height>20</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Remove too small areas</string>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
-  </widget>
-  <widget class="QLabel" name="dlg_warning">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>350</y>
-     <width>401</width>
-     <height>16</height>
-    </rect>
-   </property>
-   <property name="font">
-    <font>
-     <weight>75</weight>
-     <bold>true</bold>
-    </font>
-   </property>
-   <property name="text">
-    <string/>
-   </property>
-  </widget>
-  <widget class="QComboBox" name="dlg_type">
-   <property name="geometry">
-    <rect>
-     <x>170</x>
-     <y>160</y>
-     <width>251</width>
-     <height>26</height>
-    </rect>
-   </property>
+  <layout class="QVBoxLayout" name="verticalLayout_2">
    <item>
-    <property name="text">
-     <string>Simplification + Smoothing</string>
-    </property>
+    <widget class="QLabel" name="label">
+     <property name="text">
+      <string>Input line or polygon layer to generalise:</string>
+     </property>
+    </widget>
    </item>
    <item>
-    <property name="text">
-     <string>Simplification</string>
-    </property>
+    <widget class="QCheckBox" name="cb_all">
+     <property name="text">
+      <string>Generalize all suitable layers</string>
+     </property>
+    </widget>
    </item>
    <item>
-    <property name="text">
-     <string>Smoothing</string>
-    </property>
+    <widget class="QComboBox" name="dlg_layer"/>
    </item>
    <item>
-    <property name="text">
-     <string>Orthogonal Segments</string>
-    </property>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QCheckBox" name="dlg_selected">
+       <property name="text">
+        <string>Use only selected features</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="dlg_remove_small">
+       <property name="text">
+        <string>Remove too small areas</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
-  </widget>
-  <widget class="QLabel" name="label_4">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>160</y>
-     <width>141</width>
-     <height>30</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Generalisation type:</string>
-   </property>
-  </widget>
-  <widget class="QComboBox" name="dlg_layer">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>50</y>
-     <width>401</width>
-     <height>31</height>
-    </rect>
-   </property>
-  </widget>
-  <widget class="QgsFileWidget" name="dlg_file">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>270</y>
-     <width>401</width>
-     <height>44</height>
-    </rect>
-   </property>
-   <property name="storageMode">
-    <enum>QgsFileWidget::SaveFile</enum>
-   </property>
-  </widget>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>Map scale denominator:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="dlg_scale"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <widget class="QLabel" name="label_4">
+       <property name="text">
+        <string>Generalisation type:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="dlg_type">
+       <item>
+        <property name="text">
+         <string>Simplification + Smoothing</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Simplification</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Smoothing</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Orthogonal Segments</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_3">
+     <property name="text">
+      <string>Specify output file:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QgsFileWidget" name="dlg_file"/>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="dlg_add">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Add result to canvas</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="dlg_warning">
+     <property name="font">
+      <font>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="button_box">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Close|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
  </widget>
  <customwidgets>
   <customwidget>

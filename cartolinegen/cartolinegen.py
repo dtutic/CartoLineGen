@@ -22,10 +22,8 @@
  ***************************************************************************/
 """
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QAction
-
-
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -34,7 +32,7 @@ from .cartolinegen_dialog import CartoLineGenDialog
 import os.path
 
 from PyQt5.QtWidgets import QFileDialog
-from qgis.gui import QgsMessageBar
+from qgis.gui import QgsFileWidget, QgsMessageBar
 
 from . import generalize
 #from .generalize import initialize, Generalize, progress_changed
@@ -44,7 +42,7 @@ import datetime
 
 class CartoLineGen:
     """QGIS Plugin Implementation."""
-   
+
     def __init__(self, iface):
         """Constructor.
 
@@ -180,7 +178,6 @@ class CartoLineGen:
             callback=self.run,
             parent=self.iface.mainWindow())
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
@@ -191,7 +188,6 @@ class CartoLineGen:
         # remove the toolbar
         del self.toolbar
 
-
     def run(self):
         """Run method that performs all the real work"""
         #round canvas map scale to 1000, results of generalisation are not that much sensitive to exact scale denominator
@@ -199,15 +195,20 @@ class CartoLineGen:
         #reset output file dialog
         self.dlg.dlg_file.setStorageMode(3)
         self.dlg.dlg_file.setFilePath('')
+        #connect enabling/disabling of layer selection widget depending on batch/single mode
+        self.dlg.cb_all.stateChanged.connect(self.toggle_layer_selection)
+        self.dlg.cb_all.stateChanged.connect(self.count_vertices)
         #connect counting of vertices when layer or selected features are changed in order to estimate time
-        self.dlg.dlg_layer.currentIndexChanged.connect(self.count_vertices) 
+        self.dlg.dlg_layer.currentIndexChanged.connect(self.count_vertices)
         self.dlg.dlg_selected.stateChanged.connect(self.count_vertices)
         #populate vector layers with lines or polygons into layer combo box
         layers = QgsProject.instance().mapLayers().values()
         self.dlg.dlg_layer.clear()
+        self.usable_layers = []
         for layer in layers:
             if layer.type() == QgsMapLayer.VectorLayer and (layer.geometryType() == QgsWkbTypes.GeometryType.LineGeometry or layer.geometryType() == QgsWkbTypes.GeometryType.PolygonGeometry):
-                self.dlg.dlg_layer.addItem( layer.name(), layer ) 
+                self.dlg.dlg_layer.addItem(layer.name(), layer)
+                self.usable_layers.append(layer)
         #count vertices if there is layer in project in order to show it when dialog is loaded
         layer = self.dlg.dlg_layer.itemData(self.dlg.dlg_layer.currentIndex())
         if layer is None: #no input layer 
@@ -215,12 +216,15 @@ class CartoLineGen:
             return -1
         else:
             self.count_vertices()
-        #execute dialog    
+        #execute dialog
         result = self.dlg.exec_()
         if result:
+            if self.dlg.cb_all.isChecked():
+                self.generalize_batch(self.usable_layers)
+            else:
+                self.generalize(layer)
             #check if valid output filename is given
-            filePath = self.dlg.dlg_file.filePath()
-            self.generalize()
+            #filePath = self.dlg.dlg_file.filePath()
             #if os.path.exists(filePath) or os.access(os.path.dirname(filePath), os.W_OK):
             #    try:
             #        self.generalize()
@@ -228,46 +232,62 @@ class CartoLineGen:
             #        qgis.utils.iface.messageBar().pushMessage("Error", "Can't generalize! Check geometry validity.", level=Qgis.Critical, duration=10)
             #else:        
             #    qgis.utils.iface.messageBar().pushMessage("Error", "Invalid output file given!", level=Qgis.Critical, duration=10)
-            
+
     def count_vertices(self):
-        inLayer = self.dlg.dlg_layer.itemData(self.dlg.dlg_layer.currentIndex())
-        if inLayer is not None and inLayer.type() == 0: #Layer is vector
-            #check if only selected objects are to be generalized           
-            if self.dlg.dlg_selected.isChecked():
-                feat = inLayer.selectedFeatures()
-            else:    
-                feat = inLayer.getFeatures()
-            #estimate number of vertices from wkbSize/16, it is much faster than counting vertices
-            count = sum([feature.geometry().asWkb().length() for feature in feat])/16
-            #round estimated number of vertices to 100
-            count = int(count/100+1)*100
-            if count > 0:
-                #estimate time needed for generalisation and warn user that it can take up a while
-                self.dlg.dlg_warning.setText("~"+str(count)+" vertices. Generalisation can take up to "+ str(int(count/400000)+1)+" min!")
-                return count
-            else:    
-                self.dlg.dlg_warning.setText("No features selected! Output file will be empty.")
-        else:        
-            self.dlg.dlg_warning.setText("Please select a vector layer to generalize!")
+        if self.dlg.cb_all.isChecked():
+            layers = self.usable_layers
+        else:
+            layers = [self.dlg.dlg_layer.itemData(self.dlg.dlg_layer.currentIndex())]
+        count = 0
+        for layer in layers:
+            if layer is not None and layer.type() == 0: #Layer is vector
+                #check if only selected objects are to be generalized
+                if self.dlg.dlg_selected.isChecked():
+                    feat = layer.selectedFeatures()
+                else:
+                    feat = layer.getFeatures()
+                #estimate number of vertices from wkbSize/16, it is much faster than counting vertices
+                count += sum([feature.geometry().asWkb().length() for feature in feat])/16
+        #round estimated number of vertices to 100
+        count = int(count/100+1)*100
+        if count > 0:
+            #estimate time needed for generalisation and warn user that it can take up a while
+            self.dlg.dlg_warning.setText("~"+str(count)+" vertices. Generalisation can take up to "+ str(int(count/400000)+1)+" min!")
+            return count
+        else:
+            self.dlg.dlg_warning.setText("No features selected! Output file will be empty.")
+        #else:
+            #self.dlg.dlg_warning.setText("Please select a vector layer to generalize!")
 
-   
-    def generalize(self):
+    def toggle_layer_selection(self) -> None:
+        if self.dlg.cb_all.isChecked():
+            self.dlg.label_3.setText("Specify output directory:")
+            self.dlg.dlg_file.setStorageMode(QgsFileWidget.StorageMode.GetDirectory)
+            self.dlg.dlg_layer.setEnabled(False)
+        else:
+            self.dlg.label_3.setText("Specify output file:")
+            self.dlg.dlg_file.setStorageMode(QgsFileWidget.StorageMode.GetFile)
+            self.dlg.dlg_layer.setEnabled(True)
 
-        inLayer = self.dlg.dlg_layer.itemData(self.dlg.dlg_layer.currentIndex())
+    def generalize_batch(self, layers):
+        for layer in layers:
+            self.generalize(layer)
+
+    def generalize(self, inLayer):
         #check if layer is in projected CRS, current approach makes no sense for geographic coordinates
         #if one still wants to generalize in geographic coordinates layer CRS should be changed manually to projected CRS
         if not inLayer.crs().isGeographic():
             #create temporary shapefile filename, it will be used as input by external process "generalize.py" which uses GDAL/OGR
             inFile = os.path.dirname(inLayer.dataProvider().dataSourceUri())+'/'+inLayer.sourceName()+'_temp.shp'
-            #check if only selected objects are to be generalized           
+            #check if only selected objects are to be generalized
             sel = self.dlg.dlg_selected.isChecked()
             #sometimes layer can have malformed geometries, so select all valid features for save
             if not sel:
-                inLayer.selectAll()                  
+                inLayer.selectAll()
             #save to temporary file because GDAL/OGR functions are used to access geometries and write generalised lines
             options = QgsVectorFileWriter.SaveVectorOptions()
             #options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
-            options.driverName = 'ESRI Shapefile'     
+            options.driverName = 'ESRI Shapefile'
             context = QgsProject.instance().transformContext()
             error = QgsVectorFileWriter.writeAsVectorFormatV3(inLayer, inFile, context, options)
             if error[0] != 0:
@@ -275,16 +295,21 @@ class CartoLineGen:
             #set selection to previous state, in fact deselect object if no features were selected in the first place
             if not sel:
                 inLayer.removeSelection()
-            #scale is main parameter of algorithm    
+            #scale is main parameter of algorithm
             scale = float(self.dlg.dlg_scale.text())
             #check if small polygons should be filtered out by area threshold: 0.5 mm2 in map scale
             #too small lines are never removed for these can break topology
             if self.dlg.dlg_remove_small.isChecked():
                 area = 0.5
             else:
-                area = 0            
-            #set output filename    
-            outFile = self.dlg.dlg_file.filePath()
+                area = 0
+            #set output filename
+            if self.dlg.cb_all.isChecked():
+                outFile = os.path.join(self.dlg.dlg_file.filePath(), inLayer.name() + "_gen/")
+                if not os.path.exists(self.dlg.dlg_file.filePath()):
+                    os.makedirs(self.dlg.dlg_file.filePath())
+            else:
+                outFile = self.dlg.dlg_file.filePath()
             #type of generalisation: simplification&smoothing = 0, only simplification =1 or only smoothing=2
             alg_type = self.dlg.dlg_type.currentIndex()
             
@@ -293,7 +318,7 @@ class CartoLineGen:
             qgis.utils.iface.messageBar().clearWidgets()
             progressMessageBar = qgis.utils.iface.messageBar()
             progressMessageBar.pushWidget(generalize.progressbar)
-            qgis.utils.iface.mainWindow().repaint()   
+            qgis.utils.iface.mainWindow().repaint()
             f = QgsProcessingFeedback()
             f.progressChanged.connect(generalize.progress_changed)
             
@@ -317,6 +342,6 @@ class CartoLineGen:
             os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'/'+inLayer.sourceName()+'_temp.shp')
             os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'/'+inLayer.sourceName()+'_temp.shx')
             os.remove(os.path.dirname(inLayer.dataProvider().dataSourceUri())+'/'+inLayer.sourceName()+'_temp.cpg')
-        else:    
+        else:
             qgis.utils.iface.messageBar().clearWidgets()
             qgis.utils.iface.messageBar().pushMessage("Error", "Layer must be in projected coordinate reference system (CRS)!", level=Qgis.Critical, duration=10)
