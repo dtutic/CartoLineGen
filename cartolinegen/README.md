@@ -8,8 +8,7 @@ Tutić, D., Lapaine, M. (2009): Area Preserving Cartographic Line Generalization
 Tutić, D., Lapaine, M. (2010): New Method for Reducing Sharp Corners in Cartographic Lines with Area Preservation Property. Proceedings of the 14th International Conference on Geometry and Graphics, Kyoto, 289-290, http://bib.irb.hr/datoteka/480211.Tutic_Lapaine_full_paper.pdf.
 
 Author: Dražen Tutić
-Institution: University of Zagreb, Faculty of Geodesy
-e-mail: dtutic@geof.hr
+e-mail: dtutic@north2south.eu
 Date: 27/05/2016
 
 Since ver. 0.4. new simple algorithm for lines with orthogonal segments is added which can be usefull for buildings generalisation. 
