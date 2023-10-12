@@ -776,7 +776,7 @@ def Decide(g,closed,g_type,out_geom,alg_type,single_line):
 #--------------------------------------------------------------------------------------------------------------
 
 def progress_changed(progress):
-    progressbar.setValue(progress)     
+    progressbar.setValue(int(progress))
     
 def Generalize(scale,small_area,alg_type,inFile,outFile):   
 
